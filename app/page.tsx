@@ -370,8 +370,9 @@ function DashboardContent() {
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
               <Fish className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500 shrink-0" />
-              <h1 className="text-lg sm:text-2xl font-premium-title bg-gradient-to-r from-purple-500 via-pink-500 to-violet-500 bg-clip-text text-transparent truncate">
-                {isSelectMode ? 'Select Guides' : 'goldfish'}
+              <h1 className="text-lg sm:text-2xl font-premium-title bg-gradient-to-r from-purple-500 via-pink-500 to-violet-500 bg-clip-text text-transparent truncate"
+                  style={{ fontFamily: "'DM Serif Display', serif" }}>
+                  {isSelectMode ? 'Select Guides' : 'goldfish'}
               </h1>
               {isSelectMode && (
                 <Badge variant="secondary" className="gradient-bg-subtle gradient-text border-pink-500/20 shrink-0">

@@ -93,6 +93,26 @@ export function RichTextEditor({ value, onChange, placeholder, blockType }: Rich
     }
   }, [value])
 
+  // Add highlight border radius and border style
+  useEffect(() => {
+    const styleId = 'rich-text-highlight-style';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.innerHTML = `
+        .rich-text-editor span[style*="background-color"],
+        .rich-text-editor mark {
+          border-radius: 12px !important;
+          box-shadow: 0 1px 4px 0 rgba(0,0,0,0.04);
+          border: 1.5px solid #fbbf24;
+          padding: 0.1em 0.3em;
+          transition: box-shadow 0.2s;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
+
   const handleVisualInput = () => {
     if (editorRef.current) {
       let content = editorRef.current.innerHTML;

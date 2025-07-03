@@ -469,7 +469,17 @@ export function GuideEditor() {
     }
 
     const updatedSlides = [...slides]
-    updatedSlides[currentSlide].blocks.push(newBlock)
+    const blocks = updatedSlides[currentSlide].blocks
+    if (selectedBlock) {
+      const selectedIndex = blocks.findIndex(b => b.id === selectedBlock)
+      if (selectedIndex !== -1) {
+        blocks.splice(selectedIndex + 1, 0, newBlock)
+      } else {
+        blocks.push(newBlock)
+      }
+    } else {
+      blocks.push(newBlock)
+    }
     setSlides(updatedSlides)
     setSelectedBlock(newBlock.id)
   }
@@ -593,10 +603,23 @@ export function GuideEditor() {
   }
 
   const updateBlockStyle = (blockId: string, styleKey: string, value: any) => {
+    let safeValue = value;
+    if (Array.isArray(value)) {
+      safeValue = value[0];
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(`updateBlockStyle: Received array for styleKey '${styleKey}', using first element.`, value);
+      }
+    }
+    if (typeof safeValue !== 'number' && typeof safeValue !== 'string') {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(`updateBlockStyle: Ignoring invalid style value for '${styleKey}':`, safeValue);
+      }
+      return;
+    }
     const updatedSlides = slides.map((slide) => ({
       ...slide,
       blocks: slide.blocks.map((block) =>
-        block.id === blockId ? { ...block, styles: { ...block.styles, [styleKey]: value } } : block,
+        block.id === blockId ? { ...block, styles: { ...block.styles, [styleKey]: safeValue } } : block,
       ),
     }))
     setSlides(updatedSlides)
@@ -700,7 +723,6 @@ export function GuideEditor() {
 
     if (draggedIndex !== -1 && targetIndex !== -1) {
       const [draggedItem] = currentBlocks.splice(draggedIndex, 1)
-      
       // Insert based on drag position
       let insertIndex = targetIndex
       if (dragPosition === 'below' && draggedIndex < targetIndex) {
@@ -712,9 +734,9 @@ export function GuideEditor() {
       } else if (dragPosition === 'above' && draggedIndex < targetIndex) {
         insertIndex = targetIndex
       }
-      
       currentBlocks.splice(insertIndex, 0, draggedItem)
       setSlides(updatedSlides)
+      setSelectedBlock(draggedBlock) // <-- Ensure the dragged block stays selected
     }
 
     setDraggedBlock(null)
@@ -842,23 +864,34 @@ export function GuideEditor() {
         )
       case "image":
         return (
-          <div style={{ ...finalStyles, position: 'relative', display: 'inline-block' }}>
+          <div
+            style={{
+              ...finalStyles,
+              position: 'relative',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              width: styles.width ? `${styles.width}%` : "100%",
+              height: styles.height ? `${styles.height}px` : "auto",
+              overflow: 'hidden',
+            }}
+          >
             <img
               src={content || "/placeholder.png"}
               alt="Content"
               style={{
-                maxWidth: styles.width ? `${styles.width}%` : "100%",
-                width: styles.width ? `${styles.width}%` : "auto",
-                height: styles.height ? `${styles.height}px` : "auto",
-                display: "block",
-                margin: "0 auto",
+                maxWidth: "100%",
+                maxHeight: "100%",
+                width: "auto",
+                height: "auto",
                 borderRadius: finalStyles.borderRadius,
-                objectFit: "contain"
+                objectFit: "contain",
+                display: "block",
               }}
             />
             <button
               type="button"
-              onClick={() => setExpandedMedia({ type: 'image', src: content || "/placeholder.png" })}
+              onClick={e => triggerZoom(e, 'image', content || "/placeholder.png", styles.backgroundColor?.startsWith('linear-gradient') ? { background: styles.backgroundColor } : { backgroundColor: styles.backgroundColor || 'transparent' })}
               style={{
                 position: 'absolute',
                 top: 8,
@@ -868,6 +901,9 @@ export function GuideEditor() {
                 padding: 4,
                 cursor: 'pointer',
                 zIndex: 2,
+                background: 'rgba(0,0,0,0.5)',
+                color: '#fff',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
               }}
               aria-label="Expand image"
             >
@@ -893,7 +929,7 @@ export function GuideEditor() {
             />
             <button
               type="button"
-              onClick={() => setExpandedMedia({ type: 'video', src: content })}
+              onClick={() => triggerZoom(e, 'video', content, styles.backgroundColor?.startsWith('linear-gradient') ? { background: styles.backgroundColor } : { backgroundColor: styles.backgroundColor || 'transparent' })}
               style={{
                 position: 'absolute',
                 top: 8,
@@ -903,6 +939,9 @@ export function GuideEditor() {
                 padding: 4,
                 cursor: 'pointer',
                 zIndex: 2,
+                background: 'rgba(0,0,0,0.5)',
+                color: '#fff',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
               }}
               aria-label="Expand video"
             >
@@ -927,7 +966,7 @@ export function GuideEditor() {
             />
             <button
               type="button"
-              onClick={() => setExpandedMedia({ type: 'image', src: content || "/placeholder.png" })}
+              onClick={e => triggerZoom(e, 'image', content || "/placeholder.png", styles.backgroundColor?.startsWith('linear-gradient') ? { background: styles.backgroundColor } : { backgroundColor: styles.backgroundColor || 'transparent' })}
               style={{
                 position: 'absolute',
                 top: 8,
@@ -937,6 +976,9 @@ export function GuideEditor() {
                 padding: 4,
                 cursor: 'pointer',
                 zIndex: 2,
+                background: 'rgba(0,0,0,0.5)',
+                color: '#fff',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
               }}
               aria-label="Expand image"
             >
@@ -1054,7 +1096,78 @@ export function GuideEditor() {
     }
   }, [selectedBlockData?.content]);
 
-  const [expandedMedia, setExpandedMedia] = useState<{ type: 'image' | 'video', src: string } | null>(null)
+  const [expandedMedia, setExpandedMedia] = useState<{ type: 'image' | 'video', src: string, backgroundStyle?: React.CSSProperties, originRect?: DOMRect } | null>(null)
+  const [isZooming, setIsZooming] = useState(false)
+  const [zoomStyle, setZoomStyle] = useState<React.CSSProperties | null>(null)
+  const zoomRef = useRef<HTMLImageElement | HTMLVideoElement | null>(null)
+
+  // Helper to trigger zoom animation
+  const triggerZoom = (e: React.MouseEvent, type: 'image' | 'video', src: string, backgroundStyle?: React.CSSProperties) => {
+    const rect = (e.target as HTMLElement).getBoundingClientRect()
+    setExpandedMedia({ type, src, backgroundStyle, originRect: rect })
+    setIsZooming(true)
+    setZoomStyle({
+      position: 'fixed',
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      zIndex: 9999,
+      borderRadius: 16,
+      boxShadow: '0 4px 32px rgba(0,0,0,0.10)',
+      transition: 'all 0.4s cubic-bezier(0.4,0,0.2,1)',
+      objectFit: 'contain',
+    })
+  }
+
+  // Animate to center on mount
+  useEffect(() => {
+    if (isZooming && expandedMedia?.originRect) {
+      setTimeout(() => {
+        setZoomStyle({
+          position: 'fixed',
+          left: '50%',
+          top: '50%',
+          width: '80vw',
+          height: '70vh',
+          zIndex: 9999,
+          borderRadius: 16,
+          boxShadow: '0 4px 32px rgba(0,0,0,0.10)',
+          transform: 'translate(-50%, -50%)',
+          transition: 'all 0.4s cubic-bezier(0.4,0,0.2,1)',
+          objectFit: 'contain',
+        })
+      }, 10)
+    }
+  }, [isZooming, expandedMedia])
+
+  // Animate back on close
+  const handleZoomClose = () => {
+    if (expandedMedia?.originRect) {
+      setZoomStyle({
+        position: 'fixed',
+        left: expandedMedia.originRect.left,
+        top: expandedMedia.originRect.top,
+        width: expandedMedia.originRect.width,
+        height: expandedMedia.originRect.height,
+        zIndex: 9999,
+        borderRadius: 16,
+        boxShadow: '0 4px 32px rgba(0,0,0,0.10)',
+        transform: 'none',
+        transition: 'all 0.4s cubic-bezier(0.4,0,0.2,1)',
+        objectFit: 'contain',
+      })
+      setTimeout(() => {
+        setIsZooming(false)
+        setExpandedMedia(null)
+        setZoomStyle(null)
+      }, 400)
+    } else {
+      setIsZooming(false)
+      setExpandedMedia(null)
+      setZoomStyle(null)
+    }
+  }
 
   // Show loading state
   if (isLoading) {
@@ -1203,7 +1316,7 @@ export function GuideEditor() {
               <Dialog open={isPublishDialogOpen} onOpenChange={setIsPublishDialogOpen}>
                 <DialogTrigger asChild>
                   <Button 
-                    className="bg-green-600 hover:bg-green-700"
+                    className="bg-green-600 hover:bg-green-700 min-w-[120px] flex-shrink-0 whitespace-nowrap"
                     disabled={isSaving}
                   >
                     <Share2 className="h-4 w-4 mr-2" />
@@ -1251,7 +1364,7 @@ export function GuideEditor() {
                         Cancel
                       </Button>
                       <Button 
-                        className="bg-green-600 hover:bg-green-700" 
+                        className="bg-green-600 hover:bg-green-700 min-w-[120px] flex-shrink-0 whitespace-nowrap"
                         onClick={handlePublish}
                         disabled={isSaving}
                       >
@@ -2140,16 +2253,42 @@ export function GuideEditor() {
         </div>
       </div>
       {/* Expanded Media Dialog */}
-      <Dialog open={!!expandedMedia} onOpenChange={open => !open && setExpandedMedia(null)}>
-        <DialogContent className="max-w-5xl w-full flex flex-col items-center justify-center max-h-[90vh]">
+      <Dialog open={!!expandedMedia && !isZooming} onOpenChange={open => { if (!open) handleZoomClose() }}>
+        <DialogContent
+          className="fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-10 shadow-lg duration-200 sm:rounded-2xl !max-w-4xl !w-full flex flex-col items-center justify-center !max-h-[80vh] bg-white/90 dark:bg-gray-900/90"
+          style={expandedMedia?.backgroundStyle}
+        >
           {expandedMedia?.type === 'image' && (
-            <img src={expandedMedia.src} alt="Expanded" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 12 }} />
+            <img src={expandedMedia.src} alt="Expanded" style={{ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' }} />
           )}
           {expandedMedia?.type === 'video' && (
-            <video src={expandedMedia.src} controls autoPlay style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 12 }} />
+            <video src={expandedMedia.src} controls autoPlay style={{ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' }} />
           )}
         </DialogContent>
       </Dialog>
+      {isZooming && expandedMedia && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.7)' }} onClick={handleZoomClose} />
+      )}
+      {isZooming && expandedMedia && (
+        expandedMedia.type === 'image' ? (
+          <img
+            ref={zoomRef as React.RefObject<HTMLImageElement>}
+            src={expandedMedia.src}
+            alt="Expanded"
+            style={zoomStyle || {}}
+            onClick={handleZoomClose}
+          />
+        ) : (
+          <video
+            ref={zoomRef as React.RefObject<HTMLVideoElement>}
+            src={expandedMedia.src}
+            controls
+            autoPlay
+            style={zoomStyle || {}}
+            onClick={handleZoomClose}
+          />
+        )
+      )}
     </div>
   )
 } 

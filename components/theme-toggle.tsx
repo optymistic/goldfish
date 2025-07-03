@@ -4,13 +4,21 @@ import { useTheme } from "next-themes"
 
 import { Button } from "@/components/ui/button"
 
-export function ThemeToggle() {
+export function ThemeToggle({ children }: { children?: React.ReactNode }) {
   const { theme, setTheme } = useTheme()
 
   return (
-    <Button variant="outline" size="sm" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
-      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+      className="flex items-center justify-center gap-2 w-full"
+    >
+      <span className="relative flex items-center justify-center" style={{ width: 20, height: 20 }}>
+        <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+        <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+      </span>
+      {children}
       <span className="sr-only">Toggle theme</span>
     </Button>
   )

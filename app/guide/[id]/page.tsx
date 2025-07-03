@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
-import { ChevronLeft, ChevronRight, Home, Share2, BookOpen, Copy, Maximize, Maximize2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Home, Share2, BookOpen, Copy, Maximize, Maximize2, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +10,8 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { SocialShareDialog } from "@/components/social-share-dialog"
 import { databaseGuideStore } from "@/lib/database-guide-store"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from "@/components/ui/drawer"
+import { useIsMobile } from "@/components/ui/use-mobile"
 import DOMPurify from 'dompurify'
 
 interface ContentBlock {
@@ -179,7 +181,9 @@ export default function GuideViewer() {
   const [completionProgress, setCompletionProgress] = useState(0)
   const [hasStartedGuide, setHasStartedGuide] = useState(false)
   const [isCopied, setIsCopied] = useState(false)
-  const [expandedMedia, setExpandedMedia] = useState<{ type: 'image' | 'video', src: string } | null>(null)
+  const [expandedMedia, setExpandedMedia] = useState<{ type: 'image' | 'video', src: string, backgroundStyle?: React.CSSProperties } | null>(null)
+  const isMobile = useIsMobile();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Calculate progress percentage
   const progress = guideData && hasStartedGuide ? ((currentSlide + 1) / guideData.slides.length) * 100 : 0
@@ -332,6 +336,7 @@ export default function GuideViewer() {
         {
           const isEmpty = !block.content || block.content.trim() === '';
           const hasBlockHtml = /<(ul|ol|li|p|div|h[1-6])\b/i.test(block.content || '');
+          const headingPadding = (block.styles.padding && block.styles.padding > 0) ? `${block.styles.padding}px` : '8px 0';
           if (hasBlockHtml) {
             return (
               <div
@@ -340,7 +345,8 @@ export default function GuideViewer() {
                   fontSize: `${block.styles.fontSize || 24}px`,
                   color: block.styles.color || "hsl(var(--foreground))",
                   fontWeight: "bold",
-                  margin: "0",
+                  margin: "24px 0 24px 0",
+                  padding: headingPadding,
                 }}
                 dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? "Heading" : (block.content || '')) }}
               />
@@ -353,7 +359,8 @@ export default function GuideViewer() {
                   fontSize: `${block.styles.fontSize || 24}px`,
                   color: block.styles.color || "hsl(var(--foreground))",
                   fontWeight: "bold",
-                  margin: "0",
+                  margin: "24px 0 24px 0",
+                  padding: headingPadding,
                 }}
                 dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? "Heading" : (block.content || '')) }}
               />
@@ -394,16 +401,19 @@ export default function GuideViewer() {
             />
             <button
               type="button"
-              onClick={() => setExpandedMedia({ type: 'image', src: block.content || "/placeholder.png" })}
+              onClick={() => setExpandedMedia({ type: 'image', src: block.content || "/placeholder.png", backgroundStyle: block.styles.backgroundColor?.startsWith('linear-gradient') ? { background: block.styles.backgroundColor } : { backgroundColor: block.styles.backgroundColor || 'transparent' } })}
               style={{
                 position: 'absolute',
                 top: 8,
                 right: 8,
                 border: 'none',
                 borderRadius: '50%',
-                padding: 0,
+                padding: 4,
                 cursor: 'pointer',
                 zIndex: 2,
+                background: 'rgba(0,0,0,0.5)',
+                color: '#fff',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
               }}
               aria-label="Expand image"
             >
@@ -427,16 +437,19 @@ export default function GuideViewer() {
             />
             <button
               type="button"
-              onClick={() => setExpandedMedia({ type: 'video', src: block.content || "" })}
+              onClick={() => setExpandedMedia({ type: 'video', src: block.content || "", backgroundStyle: block.styles.backgroundColor?.startsWith('linear-gradient') ? { background: block.styles.backgroundColor } : { backgroundColor: block.styles.backgroundColor || 'transparent' } })}
               style={{
                 position: 'absolute',
                 top: 8,
                 right: 8,
                 border: 'none',
                 borderRadius: '50%',
-                padding: 0,
+                padding: 4,
                 cursor: 'pointer',
                 zIndex: 2,
+                background: 'rgba(0,0,0,0.5)',
+                color: '#fff',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
               }}
               aria-label="Expand video"
             >
@@ -565,21 +578,24 @@ export default function GuideViewer() {
                 </div>
               </div>
             </div>
-
-            <div className="flex items-center gap-2">
+            {/* Desktop header actions */}
+            <div className="hidden md:flex items-center gap-2">
               <ThemeToggle />
               <Button variant="outline" size="sm" onClick={handleSimpleShare}>
                 <Share2 className="h-4 w-4 mr-2 text-pink-500" />
                 <span className="gradient-text font-semibold">Share</span>
               </Button>
               {isFromDashboard && (
-                <Button variant="outline" size="sm" onClick={() => router.push("/")}>
-                  <Home className="h-4 w-4" />
-                </Button>
+                <Button variant="outline" size="sm" onClick={() => router.push("/")}> <Home className="h-4 w-4" /> </Button>
               )}
             </div>
+            {/* Mobile hamburger menu */}
+            <div className="flex md:hidden items-center gap-2">
+              <ThemeToggle>
+                <span className="ml-2">Theme</span>
+              </ThemeToggle>
+            </div>
           </div>
-
           {/* Progress Bar */}
           <div className="pb-3">
             <div className="flex justify-between items-center mb-1">
@@ -605,7 +621,7 @@ export default function GuideViewer() {
                   width: hasShownCongrats && currentSlide === (guideData?.slides.length || 1) - 1 ? `${completionProgress}%` : `${progress}%`,
                   backgroundColor: progress === 100 && !hasShownCongrats ? '#16a34a' : undefined,
                   boxShadow: progress === 100 && !hasShownCongrats 
-                    ? '0 0 20px rgba(34, 197, 94, 0.5)' 
+                    ? '0 0 18px rgba(34, 197, 94, 0.5)' 
                     : undefined
                 }}
               />
@@ -613,20 +629,45 @@ export default function GuideViewer() {
           </div>
         </div>
       </header>
-
+      {/* Mobile Drawer for header actions */}
+      <Drawer open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Menu</DrawerTitle>
+          </DrawerHeader>
+          <div className="flex flex-col items-center gap-4 p-4 w-full max-w-xs mx-auto">
+            <ThemeToggle>
+              <span className="ml-2">Theme</span>
+            </ThemeToggle>
+            <Button variant="outline" size="sm" className="w-full flex items-center justify-center gap-2" onClick={() => { setIsMobileMenuOpen(false); handleSimpleShare(); }}>
+              <Share2 className="h-4 w-4 mr-2 text-pink-500" />
+              <span className="gradient-text font-semibold">Share</span>
+            </Button>
+            {isFromDashboard && (
+              <Button variant="outline" size="sm" className="w-full flex items-center justify-center gap-2" onClick={() => { setIsMobileMenuOpen(false); router.push("/"); }}>
+                <Home className="h-4 w-4" />
+                <span className="ml-2">Home</span>
+              </Button>
+            )}
+            <DrawerClose asChild>
+              <Button variant="ghost" className="mt-2 w-full">Close</Button>
+            </DrawerClose>
+          </div>
+        </DrawerContent>
+      </Drawer>
       {/* Main Content Container - update to match editor page */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-12 gap-6">
-          {/* Slide Navigation */}
-          <div className="col-span-3">
-            <div className="bg-card rounded-lg border p-4 sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto">
+        {/* Mobile: Guide Navigation as its own row */}
+        {isMobile && (
+          <div className="mb-4">
+            <div className="bg-card rounded-lg border p-4">
               <h3 className="font-semibold text-sm mb-3">Guide Navigation</h3>
-              <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
                 {guideData.slides.map((slide, index) => (
                   <button
                     key={slide.id}
                     onClick={() => goToSlide(index)}
-                    className={`w-full text-left p-2.5 rounded-lg border transition-colors h-12 flex items-center ${
+                    className={`flex-1 min-w-[100px] text-left p-2.5 rounded-lg border transition-colors h-12 flex items-center justify-center ${
                       currentSlide === index
                         ? "bg-primary/10 border-primary/30 text-primary dark:bg-primary/20 dark:border-primary/40 dark:text-primary"
                         : "hover:bg-muted text-foreground"
@@ -640,15 +681,40 @@ export default function GuideViewer() {
               </div>
             </div>
           </div>
-
+        )}
+        <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-12'} gap-6`}>
+          {/* Desktop: Slide Navigation Sidebar */}
+          {!isMobile && (
+            <div className="col-span-3">
+              <div className="bg-card rounded-lg border p-4 sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto">
+                <h3 className="font-semibold text-sm mb-3">Guide Navigation</h3>
+                <div className="space-y-2">
+                  {guideData.slides.map((slide, index) => (
+                    <button
+                      key={slide.id}
+                      onClick={() => goToSlide(index)}
+                      className={`w-full text-left p-2.5 rounded-lg border transition-colors h-12 flex items-center ${
+                        currentSlide === index
+                          ? "bg-primary/10 border-primary/30 text-primary dark:bg-primary/20 dark:border-primary/40 dark:text-primary"
+                          : "hover:bg-muted text-foreground"
+                      }`}
+                    >
+                      <div className="text-xs font-bold truncate gradient-text">
+                        {index + 1}. {slide.title}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           {/* Main Content */}
-          <div className="col-span-9">
+          <div className={isMobile ? '' : 'col-span-9'}>
             <div className="bg-card rounded-lg border shadow-sm relative">
               <div className="p-8">
                 <div className="mb-6">
                   <h2 className="text-2xl font-bold gradient-text mb-2">{guideData.slides[currentSlide].title}</h2>
                 </div>
-
                 <div className="space-y-4" style={{ width: '100%', padding: 0, margin: 0 }}>
                   {guideData.slides[currentSlide].blocks.map((block) => (
                     <div key={block.id}>
@@ -657,22 +723,17 @@ export default function GuideViewer() {
                   ))}
                 </div>
               </div>
-
-              {/* Navigation Controls */}
-              <div className="border-t bg-muted/50 px-8 py-4">
+              {/* Pagination Controls - always at bottom on mobile */}
+              <div className={`border-t bg-muted/50 px-8 py-4 ${isMobile ? 'sticky bottom-0 left-0 w-full z-20' : ''}`}>
                 <div className="flex justify-between items-center gap-4">
                   <Button variant="outline" onClick={prevSlide} disabled={currentSlide === 0}>
                     <ChevronLeft className="h-4 w-4 mr-2" />
                     Previous
                   </Button>
-
                   <div className="flex items-center gap-2 min-w-0 flex-1 justify-center">
-                    {/* Slide indicator for mobile/small screens */}
                     <div className="hidden sm:block text-sm text-muted-foreground mr-3">
                       {currentSlide + 1} / {guideData.slides.length}
                     </div>
-                    
-                    {/* Scrollable dots container */}
                     <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide max-w-[200px] sm:max-w-[300px] px-2">
                       {guideData.slides.map((_, index) => (
                         <button
@@ -686,7 +747,6 @@ export default function GuideViewer() {
                       ))}
                     </div>
                   </div>
-
                   <Button
                     onClick={nextSlide}
                     disabled={currentSlide === guideData.slides.length - 1}
@@ -702,7 +762,6 @@ export default function GuideViewer() {
             </div>
           </div>
         </div>
-
         {/* Full Screen Start Guide Overlay */}
         {currentSlide === 0 && !hasStartedGuide && (
           <div 
@@ -711,32 +770,27 @@ export default function GuideViewer() {
           >
             {/* Subtle gradient background */}
             <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 via-purple-500/10 to-violet-500/10" />
-            
             {/* Clean, minimal content container */}
             <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/50 w-full max-w-md mx-6 p-6 overflow-hidden">
               {/* Full-width gradient accent like completion card */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-500 via-purple-500 to-violet-500" />
-              
               {/* Clean, centered layout */}
               <div className="text-center space-y-6">
                 {/* Signal SVG icon */}
                 <div className="flex justify-center">
                   <img src="/signal.svg" alt="Signal" className="w-72 h-24" />
                 </div>
-                
                 {/* Content section with better typography */}
                 <div className="space-y-3">
                   <h1 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight">
                     Ready to Begin?
                   </h1>
-                  
                   <p className="text-base text-gray-600 dark:text-gray-300 leading-relaxed">
                     Start your learning journey with
                     <br />
-                    <span className="font-semibold text-pink-600 dark:text-pink-400">"{guideData?.title}"</span>
+                    <span className="font-semibold text-pink-600 dark:text-pink-400">{guideData?.title}</span>
                   </p>
                 </div>
-                
                 {/* Clean action section */}
                 <div className="space-y-3">
                   <Button 
@@ -748,8 +802,7 @@ export default function GuideViewer() {
                   >
                     Start Journey
                   </Button>
-                  
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="font-bold text-xs text-gray-500 dark:text-gray-400">
                     Click anywhere to begin
                   </p>
                 </div>
@@ -758,49 +811,80 @@ export default function GuideViewer() {
           </div>
         )}
       </div>
-
-      <Dialog open={isSimpleShareDialogOpen} onOpenChange={setIsSimpleShareDialogOpen}>
-        <DialogContent className="sm:max-w-[400px] max-h-[90vh] overflow-y-auto scrollbar-hide border-0 bg-gradient-to-br from-pink-50 via-purple-50 to-violet-50 dark:from-pink-950/20 dark:via-purple-950/20 dark:to-violet-950/20 shadow-2xl">
-          <DialogHeader className="relative z-10">
-            <DialogTitle className="flex items-center gap-2 bg-gradient-to-r from-pink-600 via-purple-600 to-violet-600 bg-clip-text text-transparent font-bold">
-              <Share2 className="h-5 w-5 text-pink-500" />
-              Share Guide URL
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6 relative z-10">
-            <div className="space-y-2">
-              <label htmlFor="shareableUrl" className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                Guide URL
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="shareableUrl"
-                  value={guideUrl}
-                  readOnly
-                  className="text-sm border-gray-300 dark:border-gray-600 flex-1 rounded px-2 py-1 bg-white dark:bg-gray-900"
-                />
-                <Button size="sm" variant="outline" onClick={handleCopyUrl}>
-                  <Copy className="h-4 w-4 mr-1" />
-                  {isCopied ? "Copied!" : "Copy"}
+      {isMobile ? (
+        <Drawer open={isSimpleShareDialogOpen} onOpenChange={setIsSimpleShareDialogOpen}>
+          <DrawerContent>
+            <DrawerHeader>
+              <DrawerTitle>Share Guide URL</DrawerTitle>
+            </DrawerHeader>
+            <div className="space-y-6 p-4">
+              <div className="space-y-2">
+                <label htmlFor="shareableUrl" className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                  Guide URL
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="shareableUrl"
+                    value={guideUrl}
+                    readOnly
+                    className="text-sm border-gray-300 dark:border-gray-600 flex-1 rounded px-2 py-1 bg-white dark:bg-gray-900"
+                  />
+                  <Button size="sm" variant="outline" onClick={handleCopyUrl}>
+                    <Copy className="h-4 w-4 mr-1" />
+                    {isCopied ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setIsSimpleShareDialogOpen(false)} className="border-pink-300 hover:bg-pink-50 dark:border-pink-700 dark:hover:bg-pink-950/20 text-pink-700 dark:text-pink-300">
+                  Close
                 </Button>
               </div>
             </div>
-            <div className="flex justify-end">
-              <Button variant="outline" onClick={() => setIsSimpleShareDialogOpen(false)} className="border-pink-300 hover:bg-pink-50 dark:border-pink-700 dark:hover:bg-pink-950/20 text-pink-700 dark:text-pink-300">
-                Close
-              </Button>
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <Dialog open={isSimpleShareDialogOpen} onOpenChange={setIsSimpleShareDialogOpen}>
+          <DialogContent className="sm:max-w-[400px] max-h-[90vh] overflow-y-auto scrollbar-hide border-0 bg-gradient-to-br from-pink-50 via-purple-50 to-violet-50 dark:from-pink-950/20 dark:via-purple-950/20 dark:to-violet-950/20 shadow-2xl">
+            <DialogHeader className="relative z-10">
+              <DialogTitle className="flex items-center gap-2 bg-gradient-to-r from-pink-600 via-purple-600 to-violet-600 bg-clip-text text-transparent font-bold">
+                <Share2 className="h-5 w-5 text-pink-500" />
+                Share Guide URL
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-6 relative z-10">
+              <div className="space-y-2">
+                <label htmlFor="shareableUrl" className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                  Guide URL
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="shareableUrl"
+                    value={guideUrl}
+                    readOnly
+                    className="text-sm border-gray-300 dark:border-gray-600 flex-1 rounded px-2 py-1 bg-white dark:bg-gray-900"
+                  />
+                  <Button size="sm" variant="outline" onClick={handleCopyUrl}>
+                    <Copy className="h-4 w-4 mr-1" />
+                    {isCopied ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setIsSimpleShareDialogOpen(false)} className="border-pink-300 hover:bg-pink-50 dark:border-pink-700 dark:hover:bg-pink-950/20 text-pink-700 dark:text-pink-300">
+                  Close
+                </Button>
+              </div>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
+          </DialogContent>
+        </Dialog>
+      )}
       <SocialShareDialog
         isOpen={isShareDialogOpen}
         onClose={() => setIsShareDialogOpen(false)}
         guideTitle={guideData.title}
         guideUrl={guideUrl}
       />
-
       {/* Congratulations Popup - Redesigned */}
       <Dialog open={isCongratsDialogOpen} onOpenChange={setIsCongratsDialogOpen}>
         <DialogContent className="sm:max-w-md border-0 bg-white dark:bg-gray-900 shadow-2xl rounded-2xl overflow-hidden">
@@ -847,15 +931,17 @@ export default function GuideViewer() {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* Expanded Media Dialog */}
       <Dialog open={!!expandedMedia} onOpenChange={open => !open && setExpandedMedia(null)}>
-        <DialogContent className="max-w-5xl w-full flex flex-col items-center justify-center max-h-[90vh]">
+        <DialogContent
+          className="fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-10 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-2xl !max-w-4xl !w-full flex flex-col items-center justify-center !max-h-[80vh] bg-white/90 dark:bg-gray-900/90"
+          style={expandedMedia?.backgroundStyle}
+        >
           {expandedMedia?.type === 'image' && (
-            <img src={expandedMedia.src} alt="Expanded" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 12 }} />
+            <img src={expandedMedia.src} alt="Expanded" style={{ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' }} />
           )}
           {expandedMedia?.type === 'video' && (
-            <video src={expandedMedia.src} controls autoPlay style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 12 }} />
+            <video src={expandedMedia.src} controls autoPlay style={{ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' }} />
           )}
         </DialogContent>
       </Dialog>
