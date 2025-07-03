@@ -25,6 +25,8 @@ import {
   Link,
   RotateCcw,
   Edit,
+  Maximize2,
+  BookCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,6 +45,9 @@ import { generateUUID } from "@/lib/utils"
 import { apiClient } from "@/lib/api-client"
 import { Badge } from "@/components/ui/badge"
 import { AuthGuard } from "@/components/auth-guard"
+import DOMPurify from 'dompurify'
+// @ts-ignore
+import type { default as DOMPurifyType } from 'dompurify';
 
 // Use Supabase types
 type Slide = Database["public"]["Tables"]["slides"]["Row"] & { blocks: ContentBlock[] }
@@ -71,7 +76,7 @@ function GuideEditorPage() {
 
 export default GuideEditorPage
 
-function GuideEditor() {
+export function GuideEditor() {
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
@@ -339,20 +344,6 @@ function GuideEditor() {
     }
   }, [guideData, guideTitle, slides, customUrl, params.id, guideTags])
 
-  // Show loading state
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-premium flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="loading-rings mx-auto"></div>
-          <p className="text-lg font-semibold bg-gradient-to-r from-pink-500 via-purple-500 to-violet-500 bg-clip-text text-transparent animate-pulse">
-            Loading guide...
-          </p>
-        </div>
-      </div>
-    )
-  }
-
   const handleSaveDraft = async () => {
     const success = await saveToDatabase("draft")
     if (success) {
@@ -587,7 +578,16 @@ function GuideEditor() {
   const updateBlock = (blockId: string, updates: Partial<ContentBlock>) => {
     const updatedSlides = slides.map((slide) => ({
       ...slide,
-      blocks: slide.blocks.map((block) => (block.id === blockId ? { ...block, ...updates } : block)),
+      blocks: slide.blocks.map((block) => {
+        if (block.id === blockId) {
+          const newBlock = { ...block, ...updates };
+          if (updates.content !== undefined) {
+            console.log('[GuideEditor] updateBlock: new content value', updates.content);
+          }
+          return newBlock;
+        }
+        return block;
+      }),
     }))
     setSlides(updatedSlides)
   }
@@ -616,7 +616,7 @@ function GuideEditor() {
     e.dataTransfer.effectAllowed = "move"
     
     // Create a better drag preview that shows the full block
-    const dragPreview = e.currentTarget.cloneNode(true) as HTMLElement
+    const dragPreview = (e.currentTarget as HTMLElement).cloneNode(true) as HTMLElement
     
     // Apply drag preview styles
     dragPreview.style.opacity = '0.8'
@@ -625,7 +625,7 @@ function GuideEditor() {
     dragPreview.style.position = 'fixed'
     dragPreview.style.zIndex = '1000'
     dragPreview.style.top = '-1000px' // Hide it off-screen
-    dragPreview.style.width = `${e.currentTarget.offsetWidth}px`
+    dragPreview.style.width = `${(e.currentTarget as HTMLElement).offsetWidth}px`
     dragPreview.style.maxWidth = '300px' // Limit width for better UX
     dragPreview.style.boxShadow = '0 10px 25px rgba(0, 0, 0, 0.15)'
     dragPreview.style.borderRadius = '8px'
@@ -728,6 +728,22 @@ function GuideEditor() {
     setDragPosition(null)
   }
 
+  // Helper to sanitize and enhance HTML (add target/rel to <a> tags)
+  function sanitizeAndEnhanceHtml(html: string) {
+    // Sanitize first
+    let clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+    // Enhance <a> tags to always open in new tab and be safe
+    clean = clean.replace(/<a\s+([^>]*href=["'][^"']+["'][^>]*)>/gi, (match: string, p1: string) => {
+      // If already has target or rel, don't duplicate
+      let result = `<a ${p1}`
+      if (!/target=/.test(p1)) result += ' target="_blank"'
+      if (!/rel=/.test(p1)) result += ' rel="noopener noreferrer"'
+      result += '>'
+      return result
+    })
+    return clean
+  }
+
   const renderBlockContent = (block: ContentBlock, isPreview = false) => {
     const padding = block.styles.individualPadding 
       ? `${block.styles.paddingTop || 0}px ${block.styles.paddingRight || 0}px ${block.styles.paddingBottom || 0}px ${block.styles.paddingLeft || 0}px`
@@ -770,23 +786,44 @@ function GuideEditor() {
     // Check if content is empty for editor placeholders
     const isEmpty = !content || content.trim() === '';
 
+    // Detect block-level HTML
+    const hasBlockHtml = /<(ul|ol|li|p|div|h[1-6])\b/i.test(content);
+
     switch (type) {
       case "heading":
-        return (
-          <h2
-            style={{
-              ...finalStyles,
-              fontSize: `${styles.fontSize || 24}px`,
-              color: styles.color || "hsl(var(--foreground))",
-              fontWeight: "bold",
-              margin: 0,
-              width: "100%",
-              minHeight: "2em",
-              display: "block",
-            }}
-            dangerouslySetInnerHTML={{ __html: isEmpty ? "Heading" : content }}
-          />
-        )
+        if (hasBlockHtml) {
+          return (
+            <div
+              style={{
+                ...finalStyles,
+                fontSize: `${styles.fontSize || 24}px`,
+                color: styles.color || "hsl(var(--foreground))",
+                fontWeight: "bold",
+                margin: 0,
+                width: "100%",
+                minHeight: "2em",
+                display: "block",
+              }}
+              dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? "Heading" : content) }}
+            />
+          )
+        } else {
+          return (
+            <h2
+              style={{
+                ...finalStyles,
+                fontSize: `${styles.fontSize || 24}px`,
+                color: styles.color || "hsl(var(--foreground))",
+                fontWeight: "bold",
+                margin: 0,
+                width: "100%",
+                minHeight: "2em",
+                display: "block",
+              }}
+              dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? "Heading" : content) }}
+            />
+          )
+        }
       case "paragraph":
         return (
           <div
@@ -800,39 +837,112 @@ function GuideEditor() {
               minHeight: "1.6em",
               display: "block",
             }}
-            dangerouslySetInnerHTML={{ __html: isEmpty ? (position === "left" ? "Left Column" : position === "right" ? "Right Column" : "Paragraph") : content }}
+            dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? (position === "left" ? "Left Column" : position === "right" ? "Right Column" : "Paragraph") : content) }}
           />
         )
       case "image":
-      case "gif":
         return (
-          <img
-            src={content || "/placeholder.png"}
-            alt="Content"
-            style={{
-              ...finalStyles,
-              maxWidth: styles.width ? `${styles.width}%` : "100%",
-              width: styles.width ? `${styles.width}%` : "auto",
-              height: styles.height ? `${styles.height}px` : "auto",
-              display: "block",
-              margin: "0 auto",
-            }}
-          />
+          <div style={{ ...finalStyles, position: 'relative', display: 'inline-block' }}>
+            <img
+              src={content || "/placeholder.png"}
+              alt="Content"
+              style={{
+                maxWidth: styles.width ? `${styles.width}%` : "100%",
+                width: styles.width ? `${styles.width}%` : "auto",
+                height: styles.height ? `${styles.height}px` : "auto",
+                display: "block",
+                margin: "0 auto",
+                borderRadius: finalStyles.borderRadius,
+                objectFit: "contain"
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setExpandedMedia({ type: 'image', src: content || "/placeholder.png" })}
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                border: 'none',
+                borderRadius: '50%',
+                padding: 4,
+                cursor: 'pointer',
+                zIndex: 2,
+              }}
+              aria-label="Expand image"
+            >
+              <Maximize2 color="#fff" size={16} />
+            </button>
+          </div>
         )
       case "video":
         return (
-          <video
-            src={content}
-            controls
-            style={{
-              ...finalStyles,
-              maxWidth: styles.width ? `${styles.width}%` : "100%",
-              width: styles.width ? `${styles.width}%` : "auto",
-              height: styles.height ? `${styles.height}px` : "auto",
-              display: "block",
-              margin: "0 auto",
-            }}
-          />
+          <div style={{ ...finalStyles, position: 'relative', display: 'inline-block' }}>
+            <video
+              src={content}
+              controls
+              style={{
+                maxWidth: styles.width ? `${styles.width}%` : "100%",
+                width: styles.width ? `${styles.width}%` : "auto",
+                height: styles.height ? `${styles.height}px` : "auto",
+                display: "block",
+                margin: "0 auto",
+                borderRadius: finalStyles.borderRadius,
+                objectFit: "contain"
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setExpandedMedia({ type: 'video', src: content })}
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                border: 'none',
+                borderRadius: '50%',
+                padding: 4,
+                cursor: 'pointer',
+                zIndex: 2,
+              }}
+              aria-label="Expand video"
+            >
+              <Maximize2 color="#fff" size={16} />
+            </button>
+          </div>
+        )
+      case "gif":
+        return (
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <img
+              src={content || "/placeholder.png"}
+              alt="Content"
+              style={{
+                ...finalStyles,
+                maxWidth: styles.width ? `${styles.width}%` : "100%",
+                width: styles.width ? `${styles.width}%` : "auto",
+                height: styles.height ? `${styles.height}px` : "auto",
+                display: "block",
+                margin: "0 auto",
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setExpandedMedia({ type: 'image', src: content || "/placeholder.png" })}
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                border: 'none',
+                borderRadius: '50%',
+                padding: 4,
+                cursor: 'pointer',
+                zIndex: 2,
+              }}
+              aria-label="Expand image"
+            >
+              <Maximize2 color="#fff" size={16} />
+            </button>
+          </div>
         )
       case "embed":
         return (
@@ -937,6 +1047,29 @@ function GuideEditor() {
 
   const selectedBlockData = slides[currentSlide]?.blocks.find((b) => b.id === selectedBlock)
 
+  // Add debugging to log value passed to RichTextEditor and value stored in state
+  useEffect(() => {
+    if (selectedBlockData) {
+      console.log('[GuideEditor] RichTextEditor value prop:', selectedBlockData.content);
+    }
+  }, [selectedBlockData?.content]);
+
+  const [expandedMedia, setExpandedMedia] = useState<{ type: 'image' | 'video', src: string } | null>(null)
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-premium flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="loading-rings mx-auto"></div>
+          <p className="text-lg font-semibold bg-gradient-to-r from-pink-500 via-purple-500 to-violet-500 bg-clip-text text-transparent animate-pulse">
+            Loading guide...
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-premium">
       <Toaster />
@@ -1022,7 +1155,7 @@ function GuideEditor() {
                       onChange={e => setTagInput(e.target.value)}
                       onKeyDown={handleAddTag}
                       placeholder="Add tag..."
-                      className="text-xs border rounded px-2 py-1 min-w-[60px] max-w-[100px]"
+                      className="text-xs border rounded-md px-2 py-1 min-w-[60px] max-w-[100px]"
                     />
                   </div>
                 </div>
@@ -1077,40 +1210,43 @@ function GuideEditor() {
                     Publish
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Publish Your Guide</DialogTitle>
+                <DialogContent className="max-w-md w-full flex flex-col items-center justify-center max-h-[90vh]">
+                  <DialogHeader className="pb-4">
+                    <DialogTitle className="flex items-center gap-2">
+                      <BookCheck className="h-5 w-5 text-pink-500" />
+                      <span className="gradient-text font-bold">Publish Your Guide</span>
+                    </DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
+                  <div className="space-y-8">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                       Your guide will be published and accessible via a shareable link.
                     </p>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <Label className="text-sm font-medium">Custom URL (optional)</Label>
                       <Input
                         value={customUrl}
                         onChange={(e) => setCustomUrl(e.target.value)}
                         placeholder="my-awesome-guide"
-                        className="text-sm"
+                        className="text-sm h-10"
                       />
                       <p className="text-xs text-muted-foreground">Leave empty to use default ID-based URL</p>
                     </div>
-                    <div className="bg-muted p-3 rounded-lg">
-                      <Label className="text-xs text-muted-foreground">Shareable URL</Label>
-                      <div className="flex items-center gap-2 mt-1">
+                    <div className="bg-muted p-4 rounded-lg">
+                      <Label className="text-xs text-muted-foreground mb-2 block">Shareable URL</Label>
+                      <div className="flex items-center gap-2">
                         <Input
                           value={
                             customUrl ? `${getBaseUrl()}/guide/${customUrl}` : `${getBaseUrl()}/guide/${params.id}`
                           }
                           readOnly
-                          className="text-sm"
+                          className="text-sm h-10"
                         />
                         <Button size="sm" variant="outline" onClick={handleCopyUrl}>
                           {isCopied ? "Copied ✅" : "Copy"}
                         </Button>
                       </div>
                     </div>
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-3 pt-2">
                       <Button variant="outline" onClick={() => setIsPublishDialogOpen(false)}>
                         Cancel
                       </Button>
@@ -1163,7 +1299,7 @@ function GuideEditor() {
                   >
                     <div className="text-xs font-medium mb-1 text-foreground">Slide {index + 1}</div>
                     <div 
-                      className="text-xs text-muted-foreground truncate"
+                      className="text-xs font-bold text-muted-foreground truncate"
                       style={{
                         background: 'linear-gradient(to right, #ec4899, #a855f7, #8b5cf6)',
                         WebkitBackgroundClip: 'text',
@@ -1218,7 +1354,7 @@ function GuideEditor() {
                           updatedSlides[currentSlide].title = e.target.value
                           setSlides(updatedSlides)
                         }}
-                        className="text-sm mt-1 border-none shadow-none focus-visible:ring-0 px-0 bg-transparent group-hover:bg-muted/50 focus:bg-muted/50 rounded-md transition-colors duration-200 focus:border focus:border-primary/20 cursor-text"
+                        className="text-sm font-bold mt-1 border-none shadow-none focus-visible:ring-0 px-0 bg-transparent group-hover:bg-muted/50 focus:bg-muted/50 rounded-md transition-colors duration-200 focus:border focus:border-primary/20 cursor-text"
                         style={{
                           background: 'linear-gradient(to right, #ec4899, #a855f7, #8b5cf6)',
                           WebkitBackgroundClip: 'text',
@@ -1354,6 +1490,7 @@ function GuideEditor() {
                           value={selectedBlockData.content ?? ""}
                           onChange={(value) => updateBlock(selectedBlockData.id, { content: value })}
                           placeholder="Enter content..."
+                          blockType={selectedBlockData.type}
                         />
                       ) : (
                         <>
@@ -1427,6 +1564,7 @@ function GuideEditor() {
                             value={selectedBlockData.left_content ?? ""}
                             onChange={(value) => updateBlock(selectedBlockData.id, { left_content: value })}
                             placeholder="Left column content..."
+                            blockType={selectedBlockData.left_type || "paragraph"}
                           />
                         ) : (
                           <Input
@@ -1466,6 +1604,7 @@ function GuideEditor() {
                             value={selectedBlockData.right_content ?? ""}
                             onChange={(value) => updateBlock(selectedBlockData.id, { right_content: value })}
                             placeholder="Right column content..."
+                            blockType={selectedBlockData.right_type || "paragraph"}
                           />
                         ) : (
                           <Input
@@ -2000,6 +2139,17 @@ function GuideEditor() {
           </div>
         </div>
       </div>
+      {/* Expanded Media Dialog */}
+      <Dialog open={!!expandedMedia} onOpenChange={open => !open && setExpandedMedia(null)}>
+        <DialogContent className="max-w-5xl w-full flex flex-col items-center justify-center max-h-[90vh]">
+          {expandedMedia?.type === 'image' && (
+            <img src={expandedMedia.src} alt="Expanded" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 12 }} />
+          )}
+          {expandedMedia?.type === 'video' && (
+            <video src={expandedMedia.src} controls autoPlay style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 12 }} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

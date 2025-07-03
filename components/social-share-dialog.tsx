@@ -252,7 +252,7 @@ export function SocialShareDialog({ isOpen, onClose, guideTitle, guideUrl }: Soc
 
     // Custom message (top section) - smaller and more elegant
     if (customMessage && customMessage.trim()) {
-      ctx.font = "600 28px 'IBM Plex Sans', system-ui, sans-serif"
+      ctx.font = "600 28px 'DM Sans', system-ui, sans-serif"
       ctx.globalAlpha = 0.9
       const messageMaxWidth = canvas.width - 160
       const messageWords = customMessage.split(" ")
@@ -339,12 +339,12 @@ export function SocialShareDialog({ isOpen, onClose, guideTitle, guideUrl }: Soc
     ctx.strokeRect(canvas.width / 2 - badgeWidth / 2, badgeY - badgeHeight / 2, badgeWidth, badgeHeight)
 
     // Badge text
-    ctx.font = "600 24px 'IBM Plex Sans', system-ui, sans-serif"
+    ctx.font = "600 24px 'DM Sans', system-ui, sans-serif"
     ctx.fillStyle = selectedTheme.textColor
     ctx.fillText(badgeText, canvas.width / 2, badgeY)
 
     // Enhanced branding section
-    ctx.font = "600 18px 'IBM Plex Sans', system-ui, sans-serif"
+    ctx.font = "600 18px 'DM Sans', system-ui, sans-serif"
     ctx.fillStyle = selectedTheme.textColor
     ctx.globalAlpha = 0.8
     ctx.fillText("Created with GuideBuilder", canvas.width / 2, canvas.height - 60)
@@ -461,7 +461,7 @@ export function SocialShareDialog({ isOpen, onClose, guideTitle, guideUrl }: Soc
           
           <DialogHeader className="relative z-10">
             <DialogTitle className="flex items-center gap-2 bg-gradient-to-r from-pink-600 via-purple-600 to-violet-600 bg-clip-text text-transparent font-bold">
-              <Share2 className="h-5 w-5" />
+            <Share2 className="h-5 w-5 text-pink-500" />
               Share Your Progress
             </DialogTitle>
           </DialogHeader>

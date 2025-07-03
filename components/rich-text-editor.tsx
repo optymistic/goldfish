@@ -2,97 +2,30 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Bold, Italic, Underline, Palette } from "lucide-react"
+import { Bold, Italic, Underline, Palette, List, ListOrdered, Link, Heading1, Heading2, Heading3, CheckSquare, Code, Quote, ChevronDown } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import MarkdownIt from 'markdown-it'
 
 interface RichTextEditorProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
+  blockType?: string // 'heading', 'paragraph', etc.
 }
 
-// Simple markdown parser for WYSIWYG display
+// Replace the custom parser with markdown-it
+const mdParser = new MarkdownIt({
+  html: false, // set to true if you want to allow HTML tags in markdown
+  linkify: true,
+  typographer: true,
+})
+
 const parseMarkdown = (markdown: string): string => {
-  let html = markdown
-
-  // Handle escape characters first (before other parsing)
-  const escapeMap: { [key: string]: string } = {}
-  let escapeIndex = 0
-
-  // Replace escaped characters with temporary placeholders
-  html = html.replace(/\\(.)/g, (match, char) => {
-    const placeholder = `__ESCAPE_${escapeIndex}__`
-    escapeMap[placeholder] = char
-    escapeIndex++
-    return placeholder
-  })
-
-  // Headers
-  html = html.replace(/^### (.*$)/gim, "<h3>$1</h3>")
-  html = html.replace(/^## (.*$)/gim, "<h2>$1</h2>")
-  html = html.replace(/^# (.*$)/gim, "<h1>$1</h1>")
-
-  // Bold
-  html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-  html = html.replace(/__(.*?)__/g, "<strong>$1</strong>")
-
-  // Italic
-  html = html.replace(/\*(.*?)\*/g, "<em>$1</em>")
-  html = html.replace(/_(.*?)_/g, "<em>$1</em>")
-
-  // Code inline
-  html = html.replace(
-    /`(.*?)`/g,
-    '<code style="background-color: #f1f5f9; padding: 2px 4px; border-radius: 3px; font-family: monospace;">$1</code>',
-  )
-
-  // Code blocks
-  html = html.replace(
-    /```([\s\S]*?)```/g,
-    '<pre style="background-color: #f1f5f9; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: monospace; white-space: pre-wrap;"><code>$1</code></pre>',
-  )
-
-  // Links
-  html = html.replace(
-    /\[([^\]]+)\]$$([^)]+)$$/g,
-    '<a href="$2" style="color: #3b82f6; text-decoration: underline;">$1</a>',
-  )
-
-  // Blockquotes
-  html = html.replace(
-    /^> (.*$)/gim,
-    '<blockquote style="border-left: 4px solid #e2e8f0; padding-left: 16px; margin: 8px 0; color: #64748b; font-style: italic;">$1</blockquote>',
-  )
-
-  // Unordered lists - handle multiple items properly
-  const listItems = html.match(/^[*-] (.*)$/gm)
-  if (listItems) {
-    const listContent = listItems.map((item) => item.replace(/^[*-] (.*)$/, "<li>$1</li>")).join("")
-    html = html.replace(/^[*-] .*$/gm, "")
-    html = html + `<ul style="margin: 8px 0; padding-left: 20px;">${listContent}</ul>`
-  }
-
-  // Ordered lists - handle multiple items properly
-  const orderedItems = html.match(/^\d+\. (.*)$/gm)
-  if (orderedItems) {
-    const orderedContent = orderedItems.map((item) => item.replace(/^\d+\. (.*)$/, "<li>$1</li>")).join("")
-    html = html.replace(/^\d+\. .*$/gm, "")
-    html = html + `<ol style="margin: 8px 0; padding-left: 20px;">${orderedContent}</ol>`
-  }
-
-  // Line breaks
-  html = html.replace(/\n/g, "<br>")
-
-  // Clean up multiple br tags
-  html = html.replace(/(<br>\s*){3,}/g, "<br><br>")
-
-  // Restore escaped characters
-  Object.keys(escapeMap).forEach((placeholder) => {
-    html = html.replace(new RegExp(placeholder, "g"), escapeMap[placeholder])
-  })
-
-  return html
+  return mdParser.render(markdown)
 }
 
 // Convert HTML to Markdown
@@ -141,27 +74,38 @@ const htmlToMarkdown = (html: string): string => {
   return markdown
 }
 
-export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder, blockType }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null)
   const [highlightColor, setHighlightColor] = useState("#ffff00")
   const [isFocused, setIsFocused] = useState(false)
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
+  const [linkUrl, setLinkUrl] = useState("")
+  const [linkText, setLinkText] = useState("")
+  const savedSelection = useRef<Range | null>(null)
+  const lastContent = { current: "" };
+
+  console.log('[RichTextEditor] render: value prop', value);
 
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== value) {
-      editorRef.current.innerHTML = value
+      console.log('[RichTextEditor] useEffect: updating innerHTML', { value, current: editorRef.current.innerHTML });
+      editorRef.current.innerHTML = value;
     }
   }, [value])
 
   const handleVisualInput = () => {
     if (editorRef.current) {
-      const content = editorRef.current.innerHTML
-      // Clear placeholder styling when user starts typing
-      if (content && content !== '<br>' && content.trim() !== '') {
-        editorRef.current.classList.remove('empty')
-      } else {
-        editorRef.current.classList.add('empty')
+      let content = editorRef.current.innerHTML;
+      // Post-process: replace <div><br></div> with <br>
+      content = content.replace(/<div><br><\/div>/g, '<br>');
+      // Remove empty <div></div>
+      content = content.replace(/<div><\/div>/g, '');
+      // Only log if content changes and in development
+      if (process.env.NODE_ENV === "development" && content !== lastContent.current) {
+        console.log('[RichTextEditor] handleVisualInput: content before onChange', content);
+        lastContent.current = content;
       }
-      onChange(content)
+      onChange(content);
     }
   }
 
@@ -196,71 +140,131 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
     execCommand("hiliteColor", highlightColor)
   }
 
+  const handleHeading = (level: number) => {
+    execCommand("formatBlock", false, `h${level}`)
+  }
+
+  const handleLink = () => {
+    const selection = window.getSelection()
+    if (selection && selection.toString().trim()) {
+      setLinkText(selection.toString())
+      setLinkUrl("")
+      if (selection.rangeCount > 0) {
+        savedSelection.current = selection.getRangeAt(0)
+      }
+    } else {
+      setLinkText("")
+      setLinkUrl("")
+      savedSelection.current = null
+    }
+    setLinkDialogOpen(true)
+  }
+
+  const insertLink = () => {
+    console.log('[RichTextEditor] insertLink called');
+    if (linkUrl.trim()) {
+      const text = linkText.trim() || linkUrl
+      const linkHtml = `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer">${text}</a>`
+      if (savedSelection.current && editorRef.current) {
+        const selection = window.getSelection()
+        selection?.removeAllRanges()
+        selection?.addRange(savedSelection.current)
+      }
+      document.execCommand("insertHTML", false, linkHtml)
+      setLinkDialogOpen(false)
+      setLinkUrl("")
+      setLinkText("")
+      editorRef.current?.focus()
+      handleVisualInput()
+    }
+  }
+
+  const insertCheckbox = () => {
+    const checkboxHtml = '<input type="checkbox" style="margin-right: 8px;" />'
+    document.execCommand("insertHTML", false, checkboxHtml)
+    editorRef.current?.focus()
+    handleVisualInput()
+  }
+
+  const insertCodeBlock = () => {
+    const codeBlockHtml = '<pre style="background-color: #f1f5f9; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: monospace; margin: 8px 0;"><code>Your code here</code></pre>'
+    document.execCommand("insertHTML", false, codeBlockHtml)
+    editorRef.current?.focus()
+    handleVisualInput()
+  }
+
   return (
     <div className="border rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between p-2 border-b bg-muted/50">
-        <div className="text-xs font-medium text-muted-foreground">Rich Text Editor</div>
-
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => execCommand("bold")}
-            className="h-8 w-8 p-0"
-            title="Bold"
-          >
-            <Bold className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => execCommand("italic")}
-            className="h-8 w-8 p-0"
-            title="Italic"
-          >
-            <Italic className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => execCommand("underline")}
-            className="h-8 w-8 p-0"
-            title="Underline"
-          >
-            <Underline className="h-4 w-4" />
-          </Button>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" title="Highlight">
-                <Palette className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-48">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Highlight Color</label>
-                <Input
-                  type="color"
-                  value={highlightColor}
-                  onChange={(e) => setHighlightColor(e.target.value)}
-                  className="h-8"
-                />
-                <Button onClick={handleHighlight} size="sm" className="w-full">
-                  Apply Highlight
-                </Button>
-                <Button
-                  onClick={() => execCommand("hiliteColor", "transparent")}
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                >
-                  Remove Highlight
-                </Button>
+      {/* Toolbar: Label and two rows, 4 columns each */}
+      <div className="border-b bg-card rounded-t-lg">
+        <div className="px-3 pt-2 pb-1">
+          <div className="text-xs font-medium text-muted-foreground mb-2">Rich Text Editor</div>
+          {blockType === "heading" ? (
+            <div className="grid grid-cols-4 gap-1 mb-1">
+              <Button type="button" variant="ghost" size="sm" onClick={() => execCommand("bold")} className="h-8 w-full p-0" title="Bold"><Bold className="h-4 w-4 mx-auto" /></Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => execCommand("italic")} className="h-8 w-full p-0" title="Italic"><Italic className="h-4 w-4 mx-auto" /></Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => execCommand("underline")} className="h-8 w-full p-0" title="Underline"><Underline className="h-4 w-4 mx-auto" /></Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="ghost" size="sm" className="h-8 w-full p-0 flex justify-center items-center" title="Highlight"><Palette className="h-4 w-4" /></Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Highlight Color</label>
+                    <Input type="color" value={highlightColor} onChange={(e) => setHighlightColor(e.target.value)} className="h-8" />
+                    <Button onClick={handleHighlight} size="sm" className="w-full">Apply Highlight</Button>
+                    <Button onClick={() => execCommand("hiliteColor", "transparent")} size="sm" variant="outline" className="w-full">Remove Highlight</Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-4 gap-1 mb-1">
+                {/* Row 1 */}
+                <Button type="button" variant="ghost" size="sm" onClick={() => execCommand("bold")} className="h-8 w-full p-0" title="Bold"><Bold className="h-4 w-4 mx-auto" /></Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => execCommand("italic")} className="h-8 w-full p-0" title="Italic"><Italic className="h-4 w-4 mx-auto" /></Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => execCommand("underline")} className="h-8 w-full p-0" title="Underline"><Underline className="h-4 w-4 mx-auto" /></Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="ghost" size="sm" className="h-8 w-full p-0 flex justify-center items-center" title="Headings"><Heading1 className="h-4 w-4" /><ChevronDown className="h-3 w-3 ml-1" /></Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-32 p-1">
+                    <div className="space-y-1">
+                      <Button variant="ghost" size="sm" onClick={() => handleHeading(1)} className="w-full justify-start gap-2"><Heading1 className="h-4 w-4" />Heading 1</Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleHeading(2)} className="w-full justify-start gap-2"><Heading2 className="h-4 w-4" />Heading 2</Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleHeading(3)} className="w-full justify-start gap-2"><Heading3 className="h-4 w-4" />Heading 3</Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
-            </PopoverContent>
-          </Popover>
+              <div className="grid grid-cols-4 gap-1">
+                {/* Row 2 */}
+                <Button type="button" variant="ghost" size="sm" onClick={() => execCommand("insertUnorderedList")} className="h-8 w-full p-0" title="Bullet List"><List className="h-4 w-4 mx-auto" /></Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => execCommand("insertOrderedList")} className="h-8 w-full p-0" title="Numbered List"><ListOrdered className="h-4 w-4 mx-auto" /></Button>
+                <Button type="button" variant="ghost" size="sm" onClick={handleLink} className="h-8 w-full p-0" title="Insert Link"><Link className="h-4 w-4 mx-auto" /></Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="ghost" size="sm" className="h-8 w-full p-0 flex justify-center items-center" title="Highlight"><Palette className="h-4 w-4" /></Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Highlight Color</label>
+                      <Input type="color" value={highlightColor} onChange={(e) => setHighlightColor(e.target.value)} className="h-8" />
+                      <Button onClick={handleHighlight} size="sm" className="w-full">Apply Highlight</Button>
+                      <Button onClick={() => execCommand("hiliteColor", "transparent")} size="sm" variant="outline" className="w-full">Remove Highlight</Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="grid grid-cols-4 gap-1 mt-1">
+                {/* Row 3: Special elements (optional, can be merged with above if fewer than 8 total) */}
+                <Button type="button" variant="ghost" size="sm" onClick={insertCheckbox} className="h-8 w-full p-0" title="Insert Checkbox"><CheckSquare className="h-4 w-4 mx-auto" /></Button>
+                <Button type="button" variant="ghost" size="sm" onClick={insertCodeBlock} className="h-8 w-full p-0" title="Insert Code Block"><Code className="h-4 w-4 mx-auto" /></Button>
+                <div />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -278,9 +282,47 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
       <div className="p-2 border-t bg-muted/30">
         <div className="text-xs text-muted-foreground">
           <strong>Tip:</strong> You can use markdown syntax like **bold**, *italic*, `code`, # headings, * lists, and
-          &gt; quotes
+          &gt; quotes, or use the toolbar buttons above
         </div>
       </div>
+
+      {/* Link Dialog */}
+      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Insert Link</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="link-text">Link Text</Label>
+              <Input
+                id="link-text"
+                value={linkText}
+                onChange={(e) => setLinkText(e.target.value)}
+                placeholder="Link text (optional)"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="link-url">URL</Label>
+              <Input
+                id="link-url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://example.com"
+                type="url"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={insertLink}>
+                Insert Link
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

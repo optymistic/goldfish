@@ -1,0 +1,48 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Glow -->
+  <circle cx="100" cy="100" r="60" fill="#4CAF50" opacity="0.5">
+    <animate attributeName="r" values="60;75;60" dur="1.2s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0.5;0.2;0.5" dur="1.2s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Central circle -->
+  <circle cx="100" cy="100" r="50" fill="#4CAF50" />
+
+  <!-- Checkmark -->
+  <path d="M70 100 L90 120 L130 80"
+        fill="none"
+        stroke="#fff"
+        stroke-width="8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-dasharray="100"
+        stroke-dashoffset="100">
+    <animate attributeName="stroke-dashoffset" to="0" dur="0.6s" begin="0.4s" fill="freeze"/>
+  </path>
+
+  <!-- Radiating Sparkles -->
+  <g>
+    <circle r="2" fill="#FFEB3B">
+      <animate attributeName="cx" values="100;180" dur="1s" begin="0.5s" fill="freeze" />
+      <animate attributeName="cy" values="100;60" dur="1s" begin="0.5s" fill="freeze" />
+    </circle>
+    <circle r="2" fill="#E91E63">
+      <animate attributeName="cx" values="100;30" dur="1s" begin="0.5s" fill="freeze" />
+      <animate attributeName="cy" values="100;160" dur="1s" begin="0.5s" fill="freeze" />
+    </circle>
+    <circle r="2" fill="#03A9F4">
+      <animate attributeName="cx" values="100;160" dur="1s" begin="0.5s" fill="freeze" />
+      <animate attributeName="cy" values="100;150" dur="1s" begin="0.5s" fill="freeze" />
+    </circle>
+    <circle r="2" fill="#FFC107">
+      <animate attributeName="cx" values="100;40" dur="1s" begin="0.5s" fill="freeze" />
+      <animate attributeName="cy" values="100;40" dur="1s" begin="0.5s" fill="freeze" />
+    </circle>
+  </g>
+
+  <!-- Inner pulse with longer delay -->
+  <circle cx="100" cy="100" r="40" fill="none" stroke="#fff" stroke-width="4" opacity="0.4">
+    <animate attributeName="r" values="40;50" dur="0.8s" begin="1.5s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.4;0;0.4" dur="0.8s" begin="1.5s" repeatCount="indefinite"/>
+  </circle>
+</svg>

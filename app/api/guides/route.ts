@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       description: guideData.description,
       type: guideData.type,
       tags: guideData.tags || [],
-      userId: "550e8400-e29b-41d4-a716-446655440001", // Placeholder - replace with actual user management
+      userId: "00000000-0000-0000-0000-000000000000", // Placeholder - using provided user ID
     })
 
     if (!guide) {

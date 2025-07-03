@@ -375,6 +375,14 @@ body, html {
   overflow-x: auto;
   font-family: "Courier New", monospace;
   margin: 8px 0;
+  border: 1px solid hsl(var(--border));
+}
+
+.rich-text-editor pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.9em;
 }
 
 .rich-text-editor blockquote {
@@ -402,12 +410,51 @@ body, html {
 }
 
 .rich-text-editor a {
-  color: hsl(var(--primary));
+  color: #3b82f6;
   text-decoration: underline;
+  cursor: pointer;
+  font-weight: bold;
 }
 
 .rich-text-editor a:hover {
+  color: #2563eb;
   text-decoration: none;
+  font-weight: bold;
+}
+
+/* Checkbox styling */
+.rich-text-editor input[type="checkbox"] {
+  margin-right: 8px;
+  margin-left: 0;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+/* Toolbar separator styling */
+.rich-text-editor-toolbar .separator {
+  background-color: hsl(var(--border));
+  width: 1px;
+  height: 24px;
+  margin: 0 4px;
+}
+
+/* Ensure proper spacing for toolbar groups */
+.rich-text-editor-toolbar .toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+/* Responsive toolbar adjustments */
+@media (max-width: 768px) {
+  .rich-text-editor-toolbar {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  
+  .rich-text-editor-toolbar .separator {
+    display: none;
+  }
 }
 
 /* Drag and drop styles */
@@ -603,4 +650,69 @@ body, html {
   .scrollbar-hide::-webkit-scrollbar {
     display: none;  /* Safari and Chrome */
   }
+}
+
+/* Global list styles for preview/editor output */
+ul, ol {
+  margin: 8px 0 8px 0;
+  padding-left: 20px;
+}
+ul {
+  list-style-type: disc;
+}
+ol {
+  list-style-type: decimal;
+}
+li {
+  margin: 4px 0;
+}
+
+/* Global link styles for preview/editor output */
+a {
+  color: #3b82f6;
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: bold;
+}
+a:hover {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+/* --- Robust Video Element Reset --- */
+video {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  object-fit: contain !important;
+  outline: none !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+video::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- Robust Image Element Reset --- */
+img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  object-fit: contain !important;
+  outline: none !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
 }

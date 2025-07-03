@@ -121,7 +121,7 @@ function DashboardContent() {
         slides: newGuide.slides,
       })
 
-      if (response.success) {
+      if (response.guide) {
         toast({
           title: "Guide Created",
           description: "Your guide has been created successfully!",
