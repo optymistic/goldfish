@@ -102,10 +102,10 @@ export function RichTextEditor({ value, onChange, placeholder, blockType }: Rich
       style.innerHTML = `
         .rich-text-editor span[style*="background-color"],
         .rich-text-editor mark {
-          border-radius: 12px !important;
+          border-radius: 999px !important;
           box-shadow: 0 1px 4px 0 rgba(0,0,0,0.04);
           border: 1.5px solid #fbbf24;
-          padding: 0.1em 0.3em;
+          padding: 0.2em 0.8em;
           transition: box-shadow 0.2s;
         }
       `;
@@ -161,7 +161,7 @@ export function RichTextEditor({ value, onChange, placeholder, blockType }: Rich
   }
 
   const handleHeading = (level: number) => {
-    execCommand("formatBlock", false, `h${level}`)
+    execCommand("formatBlock", `h${level}`)
   }
 
   const handleLink = () => {

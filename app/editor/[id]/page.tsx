@@ -929,7 +929,7 @@ export function GuideEditor() {
             />
             <button
               type="button"
-              onClick={() => triggerZoom(e, 'video', content, styles.backgroundColor?.startsWith('linear-gradient') ? { background: styles.backgroundColor } : { backgroundColor: styles.backgroundColor || 'transparent' })}
+              onClick={e => triggerZoom(e, 'video', content, styles.backgroundColor?.startsWith('linear-gradient') ? { background: styles.backgroundColor } : { backgroundColor: styles.backgroundColor || 'transparent' })}
               style={{
                 position: 'absolute',
                 top: 8,
@@ -2255,8 +2255,10 @@ export function GuideEditor() {
       {/* Expanded Media Dialog */}
       <Dialog open={!!expandedMedia && !isZooming} onOpenChange={open => { if (!open) handleZoomClose() }}>
         <DialogContent
-          className="fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-10 shadow-lg duration-200 sm:rounded-2xl !max-w-4xl !w-full flex flex-col items-center justify-center !max-h-[80vh] bg-white/90 dark:bg-gray-900/90"
-          style={expandedMedia?.backgroundStyle}
+          className="fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] gap-4 border p-10 shadow-lg duration-200 sm:rounded-2xl !max-w-4xl !w-full flex flex-col items-center justify-center !max-h-[80vh]"
+          style={expandedMedia?.backgroundStyle && (typeof expandedMedia.backgroundStyle.background === 'string'
+            ? { background: expandedMedia.backgroundStyle.background }
+            : { backgroundColor: expandedMedia.backgroundStyle.backgroundColor })}
         >
           {expandedMedia?.type === 'image' && (
             <img src={expandedMedia.src} alt="Expanded" style={{ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' }} />
