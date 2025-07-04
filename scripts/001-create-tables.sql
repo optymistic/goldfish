@@ -40,7 +40,7 @@ CREATE TABLE public.slides (
 CREATE TABLE public.content_blocks (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   slide_id UUID REFERENCES public.slides(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('heading', 'paragraph', 'image', 'video', 'gif', 'two-column')),
+  type TEXT NOT NULL CHECK (type IN ('heading', 'paragraph', 'image', 'video', 'gif')),
   content TEXT,
   left_content TEXT,
   right_content TEXT,

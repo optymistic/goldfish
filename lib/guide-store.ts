@@ -1,11 +1,11 @@
 interface ContentBlock {
   id: string
-  type: "heading" | "paragraph" | "image" | "video" | "gif" | "two-column"
+  type: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column"
   content: string
-  leftContent?: string
-  rightContent?: string
-  leftType?: "heading" | "paragraph" | "image" | "video" | "gif"
-  rightType?: "heading" | "paragraph" | "image" | "video" | "gif"
+  left_content?: string
+  right_content?: string
+  left_type?: "heading" | "paragraph" | "image" | "video" | "gif" | "embed"
+  right_type?: "heading" | "paragraph" | "image" | "video" | "gif" | "embed"
   styles: {
     fontSize?: number
     color?: string
@@ -13,6 +13,9 @@ interface ContentBlock {
     borderRadius?: number
     padding?: number
     textAlign?: "left" | "center" | "right"
+    columnGap?: number
+    leftColumnWidth?: number
+    rightColumnWidth?: number
   }
 }
 

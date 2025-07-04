@@ -495,12 +495,39 @@ body, html {
   transform: scale(1.02);
 }
 
+
+
 /* Two-column layout styles */
 .two-column-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
   align-items: start;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.two-column-layout > div,
+.two-column-layout * {
+  min-width: 0;
+  max-width: 100%;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: break-all;
+  box-sizing: border-box;
+}
+
+.two-column-layout.left-wide {
+  grid-template-columns: 66.666% 33.333%;
+}
+
+.two-column-layout.right-wide {
+  grid-template-columns: 33.333% 66.666%;
+}
+
+.two-column-layout.equal {
+  grid-template-columns: 1fr 1fr;
 }
 
 /* Line clamp utilities for text truncation */
@@ -715,4 +742,11 @@ img {
   outline: none !important;
   box-shadow: none !important;
   overflow: hidden !important;
+}
+
+/* Ensure any direct parent of .two-column-layout is strictly confined */
+:has(> .two-column-layout) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }

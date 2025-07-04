@@ -106,7 +106,7 @@ export interface Database {
         Row: {
           id: string
           slide_id: string
-          type: "heading" | "paragraph" | "image" | "video" | "gif" | "two-column" | "embed"
+          type: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column"
           content: string | null
           left_content: string | null
           right_content: string | null
@@ -120,7 +120,7 @@ export interface Database {
         Insert: {
           id?: string
           slide_id: string
-          type: "heading" | "paragraph" | "image" | "video" | "gif" | "two-column" | "embed"
+          type: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column"
           content?: string | null
           left_content?: string | null
           right_content?: string | null
@@ -134,7 +134,7 @@ export interface Database {
         Update: {
           id?: string
           slide_id?: string
-          type?: "heading" | "paragraph" | "image" | "video" | "gif" | "two-column" | "embed"
+          type?: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column"
           content?: string | null
           left_content?: string | null
           right_content?: string | null

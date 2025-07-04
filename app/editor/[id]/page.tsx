@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 import type { Database } from "@/lib/supabase"
 
 import { useState, useEffect, useCallback, useRef } from "react"
@@ -65,6 +65,57 @@ const now = () => new Date().toISOString()
 
 // Local storage key for unsaved changes
 const getLocalStorageKey = (guideId: string) => `guide-editor-${guideId}`
+
+// Global patch: catch any array passed to style prop anywhere in the app
+if (typeof window !== "undefined") {
+  const origCreateElement = React.createElement;
+  React.createElement = function (type, props, ...children) {
+    if (props && props.style && Array.isArray(props.style)) {
+      console.error("❌ Array passed to style prop!", { type, props });
+      if (process.env.NODE_ENV !== 'production') {
+        throw new Error("Invalid style object: got array instead of plain object");
+      }
+    }
+    if (props && props.style && typeof props.style === 'object') {
+      for (const key in props.style) {
+        if (Array.isArray(props.style[key])) {
+          console.error(`❌ Array value for style property '${key}'!`, { type, props });
+          if (process.env.NODE_ENV !== 'production') {
+            throw new Error(`Invalid style property: '${key}' is an array`);
+          }
+        }
+      }
+    }
+    return origCreateElement(type, props, ...children);
+  };
+}
+
+// Add this utility near the top (after imports, before components)
+function sanitizeStyleObject(styles: any): React.CSSProperties {
+  if (!styles || typeof styles !== 'object' || Array.isArray(styles)) {
+    if (Array.isArray(styles) && process.env.NODE_ENV !== 'production') {
+      throw new Error("Invalid style object: got array instead of plain object");
+    }
+    console.warn('[sanitizeStyleObject] Invalid style object:', styles)
+    return {}
+  }
+  const sanitized: Record<string, any> = {}
+  for (const [key, value] of Object.entries(styles)) {
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number'
+    ) {
+      sanitized[key] = value
+    } else if (typeof value === 'undefined') {
+      // skip undefined
+    } else if (Array.isArray(value)) {
+      console.warn(`[sanitizeStyleObject] Skipping array style value for '${key}'`, value)
+    } else {
+      console.warn(`[sanitizeStyleObject] Skipping invalid style value for '${key}'`, value)
+    }
+  }
+  return sanitized
+}
 
 function GuideEditorPage() {
   return (
@@ -451,21 +502,14 @@ export function GuideEditor() {
       slide_id: slideId,
       type,
       content: getDefaultContent(type),
-      left_content: null,
-      right_content: null,
-      left_type: null,
-      right_type: null,
+      left_content: type === "two-column" ? "" : null,
+      right_content: type === "two-column" ? "" : null,
+      left_type: type === "two-column" ? "paragraph" : null,
+      right_type: type === "two-column" ? "paragraph" : null,
       styles: getDefaultStyles(type),
       position: slides[currentSlide]?.blocks.length + 1 || 1,
       created_at: now(),
       updated_at: now(),
-    }
-
-    if (type === "two-column") {
-      newBlock.left_content = ""
-      newBlock.right_content = ""
-      newBlock.left_type = "paragraph"
-      newBlock.right_type = "paragraph"
     }
 
     const updatedSlides = [...slides]
@@ -580,6 +624,15 @@ export function GuideEditor() {
           width: 100,
           height: 400
         }
+      case "two-column":
+        return { 
+          borderRadius: 8, 
+          padding: 16, 
+          backgroundColor: "transparent",
+          columnGap: 16,
+          leftColumnWidth: 50,
+          rightColumnWidth: 50
+        }
       default:
         return { backgroundColor: "transparent" }
     }
@@ -604,16 +657,27 @@ export function GuideEditor() {
 
   const updateBlockStyle = (blockId: string, styleKey: string, value: any) => {
     let safeValue = value;
-    if (Array.isArray(value)) {
-      safeValue = value[0];
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(`updateBlockStyle: Received array for styleKey '${styleKey}', using first element.`, value);
+    // Recursively flatten arrays
+    while (Array.isArray(safeValue)) {
+      if (safeValue.length === 0) {
+        safeValue = undefined;
+        break;
+      }
+      if (safeValue.length === 1) {
+        safeValue = safeValue[0];
+      } else {
+        console.warn(`updateBlockStyle: Array value for styleKey '${styleKey}', using first element.`, safeValue);
+        safeValue = safeValue[0];
       }
     }
-    if (typeof safeValue !== 'number' && typeof safeValue !== 'string') {
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(`updateBlockStyle: Ignoring invalid style value for '${styleKey}':`, safeValue);
-      }
+    if (
+      typeof safeValue !== 'number' &&
+      typeof safeValue !== 'string' &&
+      typeof safeValue !== 'boolean' &&
+      safeValue !== undefined &&
+      safeValue !== null
+    ) {
+      console.warn(`updateBlockStyle: Ignoring invalid style value for '${styleKey}':`, safeValue);
       return;
     }
     const updatedSlides = slides.map((slide) => ({
@@ -767,9 +831,11 @@ export function GuideEditor() {
   }
 
   const renderBlockContent = (block: ContentBlock, isPreview = false) => {
+    // Defensive: always use a number for padding values
+    const getNum = (v: any) => Array.isArray(v) ? v[0] : v || 0;
     const padding = block.styles.individualPadding 
-      ? `${block.styles.paddingTop || 0}px ${block.styles.paddingRight || 0}px ${block.styles.paddingBottom || 0}px ${block.styles.paddingLeft || 0}px`
-      : `${block.styles.padding || 0}px`
+      ? `${getNum(block.styles.paddingTop)}px ${getNum(block.styles.paddingRight)}px ${getNum(block.styles.paddingBottom)}px ${getNum(block.styles.paddingLeft)}px`
+      : `${getNum(block.styles.padding)}px`;
     
     const commonStyles = {
       backgroundColor: block.styles.backgroundColor || "transparent",
@@ -780,13 +846,41 @@ export function GuideEditor() {
     }
 
     if (block.type === "two-column") {
+      const getColumnLayout = () => {
+        const leftWidth = block.styles.leftColumnWidth || 50
+        const rightWidth = block.styles.rightColumnWidth || 50
+        if (leftWidth > rightWidth) return "left-wide"
+        if (rightWidth > leftWidth) return "right-wide"
+        return "equal"
+      }
+      
+      const columnGap = block.styles.columnGap || 16
+      
       return (
-        <div className="two-column-layout" style={commonStyles}>
-          <div className="border rounded p-4 flex items-center justify-center min-h-[100px]">
-            {renderSingleContent(block.left_type || "paragraph", block.left_content || "", block.styles, "left")}
+        <div 
+          className={`two-column-layout ${getColumnLayout()}`}
+          style={sanitizeStyleObject({
+            ...commonStyles,
+            gap: `${columnGap}px`,
+            gridTemplateColumns: (() => {
+              // Clamp and ensure left + right = 100
+              let left = Number(block.styles.leftColumnWidth) || 50;
+              let right = Number(block.styles.rightColumnWidth) || 50;
+              let total = left + right;
+              if (total !== 100) {
+                // Normalize
+                left = Math.round((left / total) * 100);
+                right = 100 - left;
+              }
+              return `${left}% ${right}%`;
+            })(),
+          })}
+        >
+          <div className="space-y-4">
+            {renderSingleContent(block.left_type || "paragraph", block.left_content || "", block.styles, commonStyles, "left")}
           </div>
-          <div className="border rounded p-4 flex items-center justify-center min-h-[100px]">
-            {renderSingleContent(block.right_type || "paragraph", block.right_content || "", block.styles, "right")}
+          <div className="space-y-4">
+            {renderSingleContent(block.right_type || "paragraph", block.right_content || "", block.styles, commonStyles, "right")}
           </div>
         </div>
       )
@@ -816,32 +910,14 @@ export function GuideEditor() {
         if (hasBlockHtml) {
           return (
             <div
-              style={{
-                ...finalStyles,
-                fontSize: `${styles.fontSize || 24}px`,
-                color: styles.color || "hsl(var(--foreground))",
-                fontWeight: "bold",
-                margin: 0,
-                width: "100%",
-                minHeight: "2em",
-                display: "block",
-              }}
+              style={sanitizeStyleObject({ ...finalStyles, fontSize: `${styles.fontSize || 24}px`, color: styles.color || "hsl(var(--foreground))", fontWeight: "bold", margin: 0, width: "100%", minHeight: "2em", display: "block" })}
               dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? "Heading" : content) }}
             />
           )
         } else {
           return (
             <h2
-              style={{
-                ...finalStyles,
-                fontSize: `${styles.fontSize || 24}px`,
-                color: styles.color || "hsl(var(--foreground))",
-                fontWeight: "bold",
-                margin: 0,
-                width: "100%",
-                minHeight: "2em",
-                display: "block",
-              }}
+              style={sanitizeStyleObject({ ...finalStyles, fontSize: `${styles.fontSize || 24}px`, color: styles.color || "hsl(var(--foreground))", fontWeight: "bold", margin: 0, width: "100%", minHeight: "2em", display: "block" })}
               dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? "Heading" : content) }}
             />
           )
@@ -849,62 +925,24 @@ export function GuideEditor() {
       case "paragraph":
         return (
           <div
-            style={{
-              ...finalStyles,
-              fontSize: `${styles.fontSize || 16}px`,
-              color: styles.color || "hsl(var(--foreground))",
-              lineHeight: 1.6,
-              margin: 0,
-              width: "100%",
-              minHeight: "1.6em",
-              display: "block",
-            }}
+            style={sanitizeStyleObject({ ...finalStyles, fontSize: `${styles.fontSize || 16}px`, color: styles.color || "hsl(var(--foreground))", lineHeight: 1.6, margin: 0, width: "100%", minHeight: "1.6em", display: "block" })}
             dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? (position === "left" ? "Left Column" : position === "right" ? "Right Column" : "Paragraph") : content) }}
           />
         )
       case "image":
         return (
           <div
-            style={{
-              ...finalStyles,
-              position: 'relative',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              width: styles.width ? `${styles.width}%` : "100%",
-              height: styles.height ? `${styles.height}px` : "auto",
-              overflow: 'hidden',
-            }}
+            style={sanitizeStyleObject({ ...finalStyles, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', width: styles.width ? `${styles.width}%` : "100%", height: styles.height ? `${styles.height}px` : "auto", overflow: 'hidden' })}
           >
             <img
               src={content || "/placeholder.png"}
               alt="Content"
-              style={{
-                maxWidth: "100%",
-                maxHeight: "100%",
-                width: "auto",
-                height: "auto",
-                borderRadius: finalStyles.borderRadius,
-                objectFit: "contain",
-                display: "block",
-              }}
+              style={sanitizeStyleObject({ maxWidth: "100%", maxHeight: "100%", width: "auto", height: "auto", borderRadius: finalStyles.borderRadius, objectFit: "contain", display: "block" })}
             />
             <button
               type="button"
               onClick={() => setExpandedMedia({ type: 'image', src: content || "/placeholder.png", backgroundStyle: styles.backgroundColor?.startsWith('linear-gradient') ? { background: styles.backgroundColor } : { backgroundColor: styles.backgroundColor || 'transparent' } })}
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                border: 'none',
-                borderRadius: '50%',
-                padding: 4,
-                cursor: 'pointer',
-                zIndex: 2,
-                background: 'rgba(0,0,0,0.5)', // semi-transparent dark background
-                color: '#fff', // ensure icon is white
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              }}
+              style={sanitizeStyleObject({ position: 'absolute', top: 8, right: 8, border: 'none', borderRadius: '50%', padding: 4, cursor: 'pointer', zIndex: 2, background: 'rgba(0,0,0,0.5)', color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' })}
               aria-label="Expand image"
             >
               <Maximize2 color="#fff" size={16} />
@@ -913,36 +951,16 @@ export function GuideEditor() {
         )
       case "video":
         return (
-          <div style={{ ...finalStyles, position: 'relative', display: 'inline-block' }}>
+          <div style={sanitizeStyleObject({ ...finalStyles, position: 'relative', display: 'inline-block' })}>
             <video
               src={content}
               controls
-              style={{
-                maxWidth: styles.width ? `${styles.width}%` : "100%",
-                width: styles.width ? `${styles.width}%` : "auto",
-                height: styles.height ? `${styles.height}px` : "auto",
-                display: "block",
-                margin: "0 auto",
-                borderRadius: finalStyles.borderRadius,
-                objectFit: "contain"
-              }}
+              style={sanitizeStyleObject({ maxWidth: styles.width ? `${styles.width}%` : "100%", width: styles.width ? `${styles.width}%` : "auto", height: styles.height ? `${styles.height}px` : "auto", display: "block", margin: "0 auto", borderRadius: finalStyles.borderRadius, objectFit: "contain" })}
             />
             <button
               type="button"
               onClick={() => setExpandedMedia({ type: 'video', src: content, backgroundStyle: styles.backgroundColor?.startsWith('linear-gradient') ? { background: styles.backgroundColor } : { backgroundColor: styles.backgroundColor || 'transparent' } })}
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                border: 'none',
-                borderRadius: '50%',
-                padding: 4,
-                cursor: 'pointer',
-                zIndex: 2,
-                background: 'rgba(0,0,0,0.5)', // semi-transparent dark background
-                color: '#fff', // ensure icon is white
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              }}
+              style={sanitizeStyleObject({ position: 'absolute', top: 8, right: 8, border: 'none', borderRadius: '50%', padding: 4, cursor: 'pointer', zIndex: 2, background: 'rgba(0,0,0,0.5)', color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' })}
               aria-label="Expand video"
             >
               <Maximize2 color="#fff" size={16} />
@@ -951,35 +969,16 @@ export function GuideEditor() {
         )
       case "gif":
         return (
-          <div style={{ position: 'relative', display: 'inline-block' }}>
+          <div style={sanitizeStyleObject({ position: 'relative', display: 'inline-block' })}>
             <img
               src={content || "/placeholder.png"}
               alt="Content"
-              style={{
-                ...finalStyles,
-                maxWidth: styles.width ? `${styles.width}%` : "100%",
-                width: styles.width ? `${styles.width}%` : "auto",
-                height: styles.height ? `${styles.height}px` : "auto",
-                display: "block",
-                margin: "0 auto",
-              }}
+              style={sanitizeStyleObject({ ...finalStyles, maxWidth: styles.width ? `${styles.width}%` : "100%", width: styles.width ? `${styles.width}%` : "auto", height: styles.height ? `${styles.height}px` : "auto", display: "block", margin: "0 auto" })}
             />
             <button
               type="button"
               onClick={() => setExpandedMedia({ type: 'image', src: content || "/placeholder.png", backgroundStyle: styles.backgroundColor?.startsWith('linear-gradient') ? { background: styles.backgroundColor } : { backgroundColor: styles.backgroundColor || 'transparent' } })}
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                border: 'none',
-                borderRadius: '50%',
-                padding: 4,
-                cursor: 'pointer',
-                zIndex: 2,
-                background: 'rgba(0,0,0,0.5)', // semi-transparent dark background
-                color: '#fff', // ensure icon is white
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              }}
+              style={sanitizeStyleObject({ position: 'absolute', top: 8, right: 8, border: 'none', borderRadius: '50%', padding: 4, cursor: 'pointer', zIndex: 2, background: 'rgba(0,0,0,0.5)', color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' })}
               aria-label="Expand image"
             >
               <Maximize2 color="#fff" size={16} />
@@ -988,15 +987,10 @@ export function GuideEditor() {
         )
       case "embed":
         return (
-          <div style={{ ...finalStyles, width: "100%" }}>
+          <div style={sanitizeStyleObject({ ...finalStyles, width: "100%" })}>
             <iframe
               src={content}
-              style={{
-                width: "100%",
-                height: styles.height ? `${styles.height}px` : "400px",
-                border: "none",
-                borderRadius: `${styles.borderRadius || 8}px`,
-              }}
+              style={sanitizeStyleObject({ width: "100%", height: styles.height ? `${styles.height}px` : "400px", border: "none", borderRadius: `${styles.borderRadius || 8}px`, })}
               allowFullScreen
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               title="Embedded content"
@@ -1006,17 +1000,7 @@ export function GuideEditor() {
             />
             {!content && (
               <div 
-                style={{
-                  width: "100%",
-                  height: styles.height ? `${styles.height}px` : "400px",
-                  border: "2px dashed #ccc",
-                  borderRadius: `${styles.borderRadius || 8}px`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "#f9f9f9",
-                  color: "#666"
-                }}
+                style={sanitizeStyleObject({ width: "100%", height: styles.height ? `${styles.height}px` : "400px", border: "2px dashed #ccc", borderRadius: `${styles.borderRadius || 8}px`, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#f9f9f9", color: "#666" })}
               >
                 Enter an embed URL above
               </div>
@@ -1465,7 +1449,8 @@ export function GuideEditor() {
                     Embed
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => addBlock("two-column")}>
-                    <Layout className="h-3 w-3 mr-1" />2 Columns
+                    <Layout className="h-3 w-3 mr-1" />
+                    2 Columns
                   </Button>
                 </div>
               </div>
@@ -1501,7 +1486,19 @@ export function GuideEditor() {
                     <Label className="text-sm font-medium">Content Type</Label>
                     <Select
                       value={selectedBlockData.type}
-                      onValueChange={(value) => updateBlock(selectedBlockData.id, { type: value as any })}
+                      onValueChange={(value) => {
+                        if (value !== selectedBlockData.type) {
+                          // Reset content safely when switching type
+                          updateBlock(selectedBlockData.id, {
+                            type: value as any,
+                            content: getDefaultContent(value as any),
+                            left_content: value === 'two-column' ? '' : undefined,
+                            right_content: value === 'two-column' ? '' : undefined,
+                            left_type: value === 'two-column' ? 'paragraph' : undefined,
+                            right_type: value === 'two-column' ? 'paragraph' : undefined,
+                          })
+                        }
+                      }}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue />
@@ -1593,7 +1590,14 @@ export function GuideEditor() {
                           <Label className="text-xs text-muted-foreground">Left Column</Label>
                           <Select
                             value={selectedBlockData.left_type || "paragraph"}
-                            onValueChange={(value) => updateBlock(selectedBlockData.id, { left_type: value as any })}
+                            onValueChange={(value) => {
+                              if (value !== selectedBlockData.left_type) {
+                                updateBlock(selectedBlockData.id, {
+                                  left_type: value as any,
+                                  left_content: getDefaultContent(value as any),
+                                })
+                              }
+                            }}
                           >
                             <SelectTrigger className="w-24 h-6 text-xs">
                               <SelectValue />
@@ -1604,6 +1608,7 @@ export function GuideEditor() {
                               <SelectItem value="image">Image</SelectItem>
                               <SelectItem value="video">Video</SelectItem>
                               <SelectItem value="gif">GIF</SelectItem>
+                              <SelectItem value="embed">Embed</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -1620,7 +1625,7 @@ export function GuideEditor() {
                           <Input
                             value={selectedBlockData.left_content ?? ""}
                             onChange={(e) => updateBlock(selectedBlockData.id, { left_content: e.target.value })}
-                            placeholder={`${selectedBlockData.left_type === "image" ? "Image" : selectedBlockData.left_type === "gif" ? "GIF" : "Video"} URL`}
+                            placeholder={`${selectedBlockData.left_type === "image" ? "Image" : selectedBlockData.left_type === "gif" ? "GIF" : selectedBlockData.left_type === "embed" ? "Embed" : "Video"} URL`}
                             className="text-sm"
                           />
                         )}
@@ -1631,9 +1636,14 @@ export function GuideEditor() {
                           <Label className="text-xs text-muted-foreground">Right Column</Label>
                           <Select
                             value={selectedBlockData.right_type || "paragraph"}
-                            onValueChange={(value) =>
-                              updateBlock(selectedBlockData.id, { right_type: value as any })
-                            }
+                            onValueChange={(value) => {
+                              if (value !== selectedBlockData.right_type) {
+                                updateBlock(selectedBlockData.id, {
+                                  right_type: value as any,
+                                  right_content: getDefaultContent(value as any),
+                                })
+                              }
+                            }}
                           >
                             <SelectTrigger className="w-24 h-6 text-xs">
                               <SelectValue />
@@ -1644,6 +1654,7 @@ export function GuideEditor() {
                               <SelectItem value="image">Image</SelectItem>
                               <SelectItem value="video">Video</SelectItem>
                               <SelectItem value="gif">GIF</SelectItem>
+                              <SelectItem value="embed">Embed</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -1660,7 +1671,7 @@ export function GuideEditor() {
                           <Input
                             value={selectedBlockData.right_content ?? ""}
                             onChange={(e) => updateBlock(selectedBlockData.id, { right_content: e.target.value })}
-                            placeholder={`${selectedBlockData.right_type === "image" ? "Image" : selectedBlockData.right_type === "gif" ? "GIF" : "Video"} URL`}
+                            placeholder={`${selectedBlockData.right_type === "image" ? "Image" : selectedBlockData.right_type === "gif" ? "GIF" : selectedBlockData.right_type === "embed" ? "Embed" : "Video"} URL`}
                             className="text-sm"
                           />
                         )}
@@ -1747,7 +1758,7 @@ export function GuideEditor() {
                                   <Label className="text-xs text-muted-foreground">Top</Label>
                                   <Slider
                                     value={[selectedBlockData.styles.paddingTop || 0]}
-                                    onValueChange={([value]) => updateBlockStyle(selectedBlockData.id, "paddingTop", value)}
+                                    onValueChange={valueArr => updateBlockStyle(selectedBlockData.id, "paddingTop", valueArr[0])}
                                     max={50}
                                     step={1}
                                     className="w-full"
@@ -1760,7 +1771,7 @@ export function GuideEditor() {
                                   <Label className="text-xs text-muted-foreground">Right</Label>
                                   <Slider
                                     value={[selectedBlockData.styles.paddingRight || 0]}
-                                    onValueChange={([value]) => updateBlockStyle(selectedBlockData.id, "paddingRight", value)}
+                                    onValueChange={valueArr => updateBlockStyle(selectedBlockData.id, "paddingRight", valueArr[0])}
                                     max={50}
                                     step={1}
                                     className="w-full"
@@ -1773,7 +1784,7 @@ export function GuideEditor() {
                                   <Label className="text-xs text-muted-foreground">Bottom</Label>
                                   <Slider
                                     value={[selectedBlockData.styles.paddingBottom || 0]}
-                                    onValueChange={([value]) => updateBlockStyle(selectedBlockData.id, "paddingBottom", value)}
+                                    onValueChange={valueArr => updateBlockStyle(selectedBlockData.id, "paddingBottom", valueArr[0])}
                                     max={50}
                                     step={1}
                                     className="w-full"
@@ -1786,7 +1797,7 @@ export function GuideEditor() {
                                   <Label className="text-xs text-muted-foreground">Left</Label>
                                   <Slider
                                     value={[selectedBlockData.styles.paddingLeft || 0]}
-                                    onValueChange={([value]) => updateBlockStyle(selectedBlockData.id, "paddingLeft", value)}
+                                    onValueChange={valueArr => updateBlockStyle(selectedBlockData.id, "paddingLeft", valueArr[0])}
                                     max={50}
                                     step={1}
                                     className="w-full"
@@ -1800,7 +1811,7 @@ export function GuideEditor() {
                               <div className="space-y-2">
                                 <Slider
                                   value={[selectedBlockData.styles.padding || 0]}
-                                  onValueChange={([value]) => updateBlockStyle(selectedBlockData.id, "padding", value)}
+                                  onValueChange={valueArr => updateBlockStyle(selectedBlockData.id, "padding", valueArr[0])}
                                   max={50}
                                   step={1}
                                   className="w-full"
@@ -1826,6 +1837,59 @@ export function GuideEditor() {
                             {selectedBlockData.styles.borderRadius || 0}px
                           </div>
                         </div>
+
+                        {/* Two Column Layout Controls */}
+                        {selectedBlockData.type === "two-column" && (
+                          <>
+                            <div className="space-y-3">
+                              <Label className="text-sm font-medium">Column Gap</Label>
+                              <Slider
+                                value={[selectedBlockData.styles.columnGap || 16]}
+                                onValueChange={([value]) => updateBlockStyle(selectedBlockData.id, "columnGap", value)}
+                                max={50}
+                                min={8}
+                                step={2}
+                                className="w-full"
+                              />
+                              <div className="text-xs text-muted-foreground">
+                                {selectedBlockData.styles.columnGap || 16}px
+                              </div>
+                            </div>
+
+                            <div className="space-y-3">
+                              <Label className="text-sm font-medium">Column Widths</Label>
+                              <div className="space-y-2">
+                                <div className="flex justify-between">
+                                  <span className="text-xs text-muted-foreground">Left: {selectedBlockData.styles.leftColumnWidth || 50}%</span>
+                                  <span className="text-xs text-muted-foreground">Right: {100 - (selectedBlockData.styles.leftColumnWidth || 50)}%</span>
+                                </div>
+                                <Slider
+                                  value={[selectedBlockData.styles.leftColumnWidth || 50]}
+                                  min={20}
+                                  max={80}
+                                  step={1}
+                                  className="w-full"
+                                  onValueChange={([value]) => {
+                                    const left = Math.max(20, Math.min(80, value));
+                                    const right = 100 - left;
+                                    updateBlock(selectedBlockData.id, {
+                                      styles: {
+                                        ...selectedBlockData.styles,
+                                        leftColumnWidth: left,
+                                        rightColumnWidth: right,
+                                      }
+                                    });
+                                  }}
+                                />
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                  <span>Left wider</span>
+                                  <span>Equal</span>
+                                  <span>Right wider</span>
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </TabsContent>
 
                       <TabsContent value="appearance" className="space-y-6 mt-4">
@@ -1973,10 +2037,7 @@ export function GuideEditor() {
                         </div>
 
                         {/* Text Color - Only show for text-based content */}
-                        {((selectedBlockData.type === "heading" || selectedBlockData.type === "paragraph") ||
-                          (selectedBlockData.type === "two-column" && 
-                           (selectedBlockData.left_type === "heading" || selectedBlockData.left_type === "paragraph" || !selectedBlockData.left_type) &&
-                           (selectedBlockData.right_type === "heading" || selectedBlockData.right_type === "paragraph" || !selectedBlockData.right_type))) && (
+                        {(selectedBlockData.type === "heading" || selectedBlockData.type === "paragraph") && (
                           <div className="space-y-3">
                             <Label className="text-sm font-medium">Text Color</Label>
                             <div className="grid grid-cols-4 gap-2">

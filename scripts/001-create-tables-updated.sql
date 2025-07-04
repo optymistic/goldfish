@@ -30,12 +30,13 @@ CREATE TABLE IF NOT EXISTS public.slides (
 CREATE TABLE IF NOT EXISTS public.content_blocks (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   slide_id UUID REFERENCES public.slides(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('heading', 'paragraph', 'image', 'video', 'gif', 'two-column', 'embed')),
+  type TEXT NOT NULL CHECK (type IN ('heading', 'paragraph', 'image', 'video', 'gif', 'embed', 'two-column')),
   content TEXT,
   left_content TEXT,
   right_content TEXT,
   left_type TEXT,
   right_type TEXT,
+
   styles JSONB DEFAULT '{}',
   position INTEGER NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

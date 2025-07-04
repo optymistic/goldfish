@@ -13,6 +13,53 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from "@/components/ui/drawer"
 import { useIsMobile } from "@/components/ui/use-mobile"
 import DOMPurify from 'dompurify'
+import { apiClient } from "@/lib/api-client"
+
+// Add sanitizeStyleObject function to prevent array-to-style errors
+function sanitizeStyleObject(styleObj: any): any {
+  if (!styleObj || typeof styleObj !== "object") return styleObj;
+  const sanitized: any = {};
+  for (const key in styleObj) {
+    let value = styleObj[key];
+    // Recursively flatten arrays
+    while (Array.isArray(value)) {
+      if (value.length === 0) {
+        value = undefined;
+        break;
+      }
+      if (value.length === 1) {
+        value = value[0];
+      } else {
+        // If array has more than one value, take the first and warn
+        console.warn(`sanitizeStyleObject: Array value for '${key}', using first element.`, value);
+        value = value[0];
+      }
+    }
+    // Only allow string, number, boolean, or undefined/null
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean' ||
+      value === undefined ||
+      value === null
+    ) {
+      sanitized[key] = value;
+    } else {
+      console.warn(`sanitizeStyleObject: Invalid style value for '${key}', omitting.`, value);
+    }
+  }
+  return sanitized;
+}
+
+// Helper to ensure style is always a valid object
+function validStyle(s: any) {
+  if (Array.isArray(s)) {
+    console.error("❌ block.styles is an array!", s);
+    return {};
+  }
+  if (!s || typeof s !== 'object') return {};
+  return s;
+}
 
 interface ContentBlock {
   id: string
@@ -31,6 +78,9 @@ interface ContentBlock {
     textAlign?: "left" | "center" | "right"
     width?: number
     height?: number
+    columnGap?: number
+    leftColumnWidth?: number
+    rightColumnWidth?: number
   }
 }
 
@@ -320,6 +370,110 @@ export default function GuideViewer() {
     handleShareProgress()
   }
 
+  const renderColumnContent = (type: string, content: string, styles: any) => {
+    const commonStyles = {
+      padding: `${styles.padding || 0}px`,
+      backgroundColor: styles.backgroundColor || "transparent",
+      borderRadius: `${styles.borderRadius || 0}px`,
+      textAlign: styles.textAlign || "left",
+    }
+
+    switch (type) {
+      case "heading":
+        return (
+          <h3
+            style={sanitizeStyleObject({
+              ...commonStyles,
+              fontSize: `${styles.fontSize || 20}px`,
+              color: styles.color || "hsl(var(--foreground))",
+              fontWeight: "bold",
+              margin: "0 0 12px 0",
+            })}
+            dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(content || "Column Heading") }}
+          />
+        )
+      case "paragraph":
+        return (
+          <div
+            style={sanitizeStyleObject({
+              ...commonStyles,
+              fontSize: `${styles.fontSize || 16}px`,
+              color: styles.color || "hsl(var(--foreground))",
+              lineHeight: 1.6,
+              margin: "0 0 12px 0",
+              whiteSpace: "pre-line",
+            })}
+            dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(content || "Column content") }}
+          />
+        )
+      case "image":
+      case "gif":
+        return (
+          <div style={sanitizeStyleObject({ ...commonStyles, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' })}>
+            <img
+              src={content || "/placeholder.png"}
+              alt="Column content"
+              style={sanitizeStyleObject({
+                width: '100%',
+                height: styles.height ? `${styles.height}px` : 'auto',
+                display: 'block',
+                borderRadius: commonStyles.borderRadius,
+                objectFit: 'contain',
+              })}
+            />
+          </div>
+        )
+      case "video":
+        return (
+          <div style={sanitizeStyleObject({ ...commonStyles, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' })}>
+            <video
+              src={content || ""}
+              controls
+              style={sanitizeStyleObject({
+                width: '100%',
+                height: 'auto',
+                display: 'block',
+                borderRadius: commonStyles.borderRadius,
+                objectFit: 'contain',
+              })}
+            />
+          </div>
+        )
+      case "embed":
+        return (
+          <div style={sanitizeStyleObject({ ...commonStyles, width: "100%" })}>
+            <iframe
+              src={content || ""}
+              style={sanitizeStyleObject({
+                width: "100%",
+                height: "300px",
+                border: "none",
+                borderRadius: `${styles.borderRadius || 8}px`,
+                display: "block",
+              })}
+              allowFullScreen
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              title="Embedded content"
+            />
+          </div>
+        )
+      default:
+        return (
+          <div
+            style={sanitizeStyleObject({
+              ...commonStyles,
+              fontSize: `${styles.fontSize || 16}px`,
+              color: styles.color || "hsl(var(--foreground))",
+              lineHeight: 1.6,
+              margin: "0 0 12px 0",
+              whiteSpace: "pre-line",
+            })}
+            dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(content || "Column content") }}
+          />
+        )
+    }
+  }
+
   const renderBlock = (block: ContentBlock) => {
     const isGradient = block.styles.backgroundColor?.startsWith('linear-gradient')
     const commonStyles = {
@@ -340,28 +494,28 @@ export default function GuideViewer() {
           if (hasBlockHtml) {
             return (
               <div
-                style={{
+                style={sanitizeStyleObject({
                   ...commonStyles,
                   fontSize: `${block.styles.fontSize || 24}px`,
                   color: block.styles.color || "hsl(var(--foreground))",
                   fontWeight: "bold",
                   margin: "24px 0 24px 0",
                   padding: headingPadding,
-                }}
+                })}
                 dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? "Heading" : (block.content || '')) }}
               />
             )
           } else {
             return (
               <h2
-                style={{
+                style={sanitizeStyleObject({
                   ...commonStyles,
                   fontSize: `${block.styles.fontSize || 24}px`,
                   color: block.styles.color || "hsl(var(--foreground))",
                   fontWeight: "bold",
                   margin: "24px 0 24px 0",
                   padding: headingPadding,
-                }}
+                })}
                 dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? "Heading" : (block.content || '')) }}
               />
             )
@@ -372,14 +526,14 @@ export default function GuideViewer() {
           const isEmpty = !block.content || block.content.trim() === '';
           return (
             <div
-              style={{
+              style={sanitizeStyleObject({
                 ...commonStyles,
                 fontSize: `${block.styles.fontSize || 16}px`,
                 color: block.styles.color || "hsl(var(--foreground))",
                 lineHeight: 1.6,
                 margin: "0 0 16px 0",
                 whiteSpace: "pre-line",
-              }}
+              })}
               dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? "Paragraph" : (block.content || '')) }}
             />
           )
@@ -387,22 +541,22 @@ export default function GuideViewer() {
       case "image":
       case "gif":
         return (
-          <div style={{ ...commonStyles, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+          <div style={sanitizeStyleObject({ ...commonStyles, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' })}>
             <img
               src={block.content || "/placeholder.png"}
               alt="Guide content"
-              style={{
+              style={sanitizeStyleObject({
                 width: '100%',
                 height: block.styles.height ? `${block.styles.height}px` : 'auto',
                 display: 'block',
                 borderRadius: commonStyles.borderRadius,
                 objectFit: 'contain',
-              }}
+              })}
             />
             <button
               type="button"
               onClick={() => setExpandedMedia({ type: 'image', src: block.content || "/placeholder.png", backgroundStyle: block.styles.backgroundColor?.startsWith('linear-gradient') ? { background: block.styles.backgroundColor } : { backgroundColor: block.styles.backgroundColor || 'transparent' } })}
-              style={{
+              style={sanitizeStyleObject({
                 position: 'absolute',
                 top: 8,
                 right: 8,
@@ -414,7 +568,7 @@ export default function GuideViewer() {
                 background: 'rgba(0,0,0,0.5)',
                 color: '#fff',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              }}
+              })}
               aria-label="Expand image"
             >
               <Maximize2 color="#fff" size={16} />
@@ -423,22 +577,22 @@ export default function GuideViewer() {
         )
       case "video":
         return (
-          <div style={{ ...commonStyles, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+          <div style={sanitizeStyleObject({ ...commonStyles, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' })}>
             <video
               src={block.content || ""}
               controls
-              style={{
+              style={sanitizeStyleObject({
                 width: '100%',
                 height: 'auto',
                 display: 'block',
                 borderRadius: commonStyles.borderRadius,
                 objectFit: 'contain',
-              }}
+              })}
             />
             <button
               type="button"
               onClick={() => setExpandedMedia({ type: 'video', src: block.content || "", backgroundStyle: block.styles.backgroundColor?.startsWith('linear-gradient') ? { background: block.styles.backgroundColor } : { backgroundColor: block.styles.backgroundColor || 'transparent' } })}
-              style={{
+              style={sanitizeStyleObject({
                 position: 'absolute',
                 top: 8,
                 right: 8,
@@ -450,7 +604,7 @@ export default function GuideViewer() {
                 background: 'rgba(0,0,0,0.5)',
                 color: '#fff',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              }}
+              })}
               aria-label="Expand video"
             >
               <Maximize2 color="#fff" size={16} />
@@ -459,17 +613,17 @@ export default function GuideViewer() {
         )
       case "embed":
         return (
-          <div style={{ ...commonStyles, width: "100%" }}>
+          <div style={sanitizeStyleObject({ ...commonStyles, width: "100%" })}>
             <iframe
               src={block.content || ""}
-              style={{
+              style={sanitizeStyleObject({
                 width: "100%",
                 height: "400px",
                 border: "none",
                 borderRadius: `${block.styles.borderRadius || 8}px`,
                 display: "block",
                 margin: "0 auto 16px auto",
-              }}
+              })}
               allowFullScreen
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               title="Embedded content"
@@ -479,7 +633,7 @@ export default function GuideViewer() {
             />
             {!block.content && (
               <div 
-                style={{
+                style={sanitizeStyleObject({
                   width: "100%",
                   height: "400px",
                   border: "2px dashed #ccc",
@@ -490,13 +644,45 @@ export default function GuideViewer() {
                   backgroundColor: "#f9f9f9",
                   color: "#666",
                   margin: "0 auto 16px auto",
-                }}
+                })}
               >
                 Embed content not available
               </div>
             )}
           </div>
         )
+      case "two-column":
+        {
+          const getColumnLayout = () => {
+            const leftWidth = block.styles.leftColumnWidth || 50
+            const rightWidth = block.styles.rightColumnWidth || 50
+            if (leftWidth > rightWidth) return "left-wide"
+            if (rightWidth > leftWidth) return "right-wide"
+            return "equal"
+          }
+          
+          const columnGap = block.styles.columnGap || 16
+          
+          return (
+            <div 
+              className={`two-column-layout ${getColumnLayout()}`}
+              style={sanitizeStyleObject({
+                ...commonStyles,
+                gap: `${columnGap}px`,
+                gridTemplateColumns: block.styles.leftColumnWidth && block.styles.rightColumnWidth 
+                  ? `${block.styles.leftColumnWidth}% ${block.styles.rightColumnWidth}%`
+                  : undefined
+              })}
+            >
+              <div className="space-y-4">
+                {renderColumnContent(block.left_type || "paragraph", block.left_content || "", block.styles)}
+              </div>
+              <div className="space-y-4">
+                {renderColumnContent(block.right_type || "paragraph", block.right_content || "", block.styles)}
+              </div>
+            </div>
+          )
+        }
       default:
         return null
     }
@@ -715,7 +901,7 @@ export default function GuideViewer() {
                 <div className="mb-6">
                   <h2 className="text-2xl font-bold gradient-text mb-2">{guideData.slides[currentSlide].title}</h2>
                 </div>
-                <div className="space-y-4" style={{ width: '100%', padding: 0, margin: 0 }}>
+                <div className="space-y-4" style={sanitizeStyleObject({ width: '100%', padding: 0, margin: 0 })}>
                   {guideData.slides[currentSlide].blocks.map((block) => (
                     <div key={block.id}>
                       {renderBlock(block)}
@@ -769,7 +955,7 @@ export default function GuideViewer() {
             onClick={() => setHasStartedGuide(true)}
           >
             {/* Subtle gradient background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 via-purple-500/10 to-violet-500/10" />
+            {/* <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 via-purple-500/10 to-violet-500/10" /> */}
             {/* Clean, minimal content container */}
             <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/50 w-full max-w-md mx-6 p-6 overflow-hidden">
               {/* Full-width gradient accent like completion card */}
@@ -934,14 +1120,14 @@ export default function GuideViewer() {
       {/* Expanded Media Dialog */}
       <Dialog open={!!expandedMedia} onOpenChange={open => !open && setExpandedMedia(null)}>
         <DialogContent
-          className="fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-10 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-2xl !max-w-4xl !w-full flex flex-col items-center justify-center !max-h-[80vh] bg-white/90 dark:bg-gray-900/90"
-          style={expandedMedia?.backgroundStyle}
+          className="fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-10 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-2xl !max-w-4xl !w-full flex flex-col items-center justify-center !max-h-[80vh]"
+          style={sanitizeStyleObject(expandedMedia?.backgroundStyle)}
         >
           {expandedMedia?.type === 'image' && (
-            <img src={expandedMedia.src} alt="Expanded" style={{ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' }} />
+            <img src={expandedMedia.src} alt="Expanded" style={sanitizeStyleObject({ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' })} />
           )}
           {expandedMedia?.type === 'video' && (
-            <video src={expandedMedia.src} controls autoPlay style={{ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' }} />
+            <video src={expandedMedia.src} controls autoPlay style={sanitizeStyleObject({ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' })} />
           )}
         </DialogContent>
       </Dialog>
