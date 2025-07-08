@@ -83,15 +83,18 @@ export function RichTextEditor({ value, onChange, placeholder, blockType }: Rich
   const [linkText, setLinkText] = useState("")
   const savedSelection = useRef<Range | null>(null)
   const lastContent = { current: "" };
+  const isUserInput = useRef(false);
 
   console.log('[RichTextEditor] render: value prop', value);
 
   useEffect(() => {
-    if (editorRef.current && editorRef.current.innerHTML !== value) {
+    // Only update innerHTML if the change is external
+    if (!isUserInput.current && editorRef.current && editorRef.current.innerHTML !== value) {
       console.log('[RichTextEditor] useEffect: updating innerHTML', { value, current: editorRef.current.innerHTML });
       editorRef.current.innerHTML = value;
     }
-  }, [value])
+    isUserInput.current = false;
+  }, [value]);
 
   // Add highlight border radius and border style
   useEffect(() => {
@@ -105,12 +108,24 @@ export function RichTextEditor({ value, onChange, placeholder, blockType }: Rich
           border-radius: 25px !important;
           padding: 0.03em 0.25em;
         }
+        .rich-text-editor input[type="checkbox"] {
+          border-radius: 4px !important;
+          border: 2px solid #d1d5db !important;
+          width: 16px !important;
+          height: 16px !important;
+          cursor: pointer !important;
+        }
+        .rich-text-editor input[type="checkbox"]:checked {
+          background-color: #3b82f6 !important;
+          border-color: #3b82f6 !important;
+        }
       `;
       document.head.appendChild(style);
     }
   }, []);
 
   const handleVisualInput = () => {
+    isUserInput.current = true;
     if (editorRef.current) {
       let content = editorRef.current.innerHTML;
       // Post-process: replace <div><br></div> with <br>
@@ -144,6 +159,53 @@ export function RichTextEditor({ value, onChange, placeholder, blockType }: Rich
       if (!content || content === '<br>' || content.trim() === '') {
         editorRef.current.classList.add('empty')
       }
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter') {
+      const selection = window.getSelection()
+      if (!selection || !selection.rangeCount) return
+      
+      const range = selection.getRangeAt(0)
+      const listItem = range.startContainer.nodeType === Node.TEXT_NODE 
+        ? (range.startContainer.parentElement as HTMLElement)?.closest('li')
+        : (range.startContainer as HTMLElement).closest('li')
+      
+      // Only run custom logic if we're in a checklist item
+      if (listItem && listItem.closest('ul.checklist')) {
+        e.preventDefault()
+        
+        // Create a new checklist item
+        const newListItem = document.createElement('li')
+        const checkbox = document.createElement('input')
+        checkbox.type = 'checkbox'
+        checkbox.style.marginRight = '4px'
+        checkbox.addEventListener('change', handleCheckboxChange)
+        
+        newListItem.appendChild(checkbox)
+        newListItem.appendChild(document.createTextNode(''))
+        
+        // Insert the new item after the current one
+        listItem.parentNode?.insertBefore(newListItem, listItem.nextSibling)
+        
+        // Set cursor to the new item - improved positioning
+        const newRange = document.createRange()
+        const checkboxElement = newListItem.firstChild as HTMLElement
+        if (checkboxElement) {
+          newRange.setStartAfter(checkboxElement)
+        } else {
+          newRange.setStart(newListItem, newListItem.childNodes.length)
+        }
+        newRange.collapse(true)
+        
+        selection.removeAllRanges()
+        selection.addRange(newRange)
+        
+        editorRef.current?.focus()
+        handleVisualInput()
+      }
+      // Otherwise, do nothing and let the browser handle Enter
     }
   }
 
@@ -291,6 +353,7 @@ export function RichTextEditor({ value, onChange, placeholder, blockType }: Rich
         onInput={handleVisualInput}
         onFocus={handleFocus}
         onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
         className="rich-text-editor min-h-[100px] p-3 focus:outline-none"
         data-placeholder={placeholder}
         suppressContentEditableWarning={true}

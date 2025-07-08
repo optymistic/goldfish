@@ -48,6 +48,7 @@ import { AuthGuard } from "@/components/auth-guard"
 import DOMPurify from 'dompurify'
 // @ts-ignore
 import type { default as DOMPurifyType } from 'dompurify';
+import "@/components/ui/fancy-checkbox.css";
 
 // Use Supabase types
 type Slide = Database["public"]["Tables"]["slides"]["Row"] & { blocks: ContentBlock[] }
@@ -827,6 +828,13 @@ export function GuideEditor() {
       result += '>'
       return result
     })
+    // Replace native checkboxes with FancyCheckbox markup
+    clean = clean.replace(/<input([^>]*type=["']checkbox["'][^>]*)>/gi, (match: string, attrs: string) => {
+      // Preserve checked/disabled attributes
+      const checked = /checked/i.test(attrs) ? 'checked' : '';
+      const disabled = /disabled/i.test(attrs) ? 'disabled' : '';
+      return `<span class=\"checkbox-wrapper-33\"><label class=\"checkbox\"><input class=\"checkbox__trigger visuallyhidden\" type=\"checkbox\" ${checked} ${disabled} /><span class=\"checkbox__symbol\"><svg aria-hidden=\"true\" class=\"icon-checkbox\" width=\"28px\" height=\"28px\" viewBox=\"0 0 28 28\" version=\"1\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M4 14l8 7L24 7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" /></svg></span></label></span>`;
+    });
     return clean
   }
 
@@ -1310,7 +1318,7 @@ export function GuideEditor() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-12 gap-6 items-start">
           {/* Slides Panel */}
-          <div className="col-span-2 card-premium rounded-lg border p-4 h-fit max-h-[calc(100vh-200px)] overflow-y-auto">
+          <div className="col-span-2 card-premium rounded-lg border p-4 sticky top-28 h-fit max-h-[calc(100vh-3rem)] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-sm">Slides</h3>
               <Button size="sm" variant="outline" onClick={addSlide}>
@@ -1385,8 +1393,10 @@ export function GuideEditor() {
                         value={slides[currentSlide]?.title || ""}
                         onChange={(e) => {
                           const updatedSlides = [...slides]
-                          updatedSlides[currentSlide].title = e.target.value
-                          setSlides(updatedSlides)
+                          if (updatedSlides[currentSlide]) {
+                            updatedSlides[currentSlide].title = e.target.value
+                            setSlides(updatedSlides)
+                          }
                         }}
                         className="text-sm font-bold mt-1 border-none shadow-none focus-visible:ring-0 px-0 bg-transparent group-hover:bg-muted/50 focus:bg-muted/50 rounded-md transition-colors duration-200 focus:border focus:border-primary/20 cursor-text"
                         style={{

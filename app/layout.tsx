@@ -4,7 +4,7 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 
 export const metadata: Metadata = {
-  title: "GuideBuilder - Create Interactive Tutorials",
+  title: "Goldfish - don't memorize, understand",
   description: "Create beautiful, interactive guides and tutorials with drag-and-drop editing",
   generator: "v0.dev",
 }

@@ -14,6 +14,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from "@
 import { useIsMobile } from "@/components/ui/use-mobile"
 import DOMPurify from 'dompurify'
 import { apiClient } from "@/lib/api-client"
+import "@/components/ui/fancy-checkbox.css";
 
 // Add sanitizeStyleObject function to prevent array-to-style errors
 function sanitizeStyleObject(styleObj: any): any {
@@ -213,6 +214,13 @@ function sanitizeAndEnhanceHtml(html: string) {
     result += '>'
     return result
   })
+  // Replace native checkboxes with FancyCheckbox markup
+  clean = clean.replace(/<input([^>]*type=["']checkbox["'][^>]*)>/gi, (match: string, attrs: string) => {
+    // Preserve checked/disabled attributes
+    const checked = /checked/i.test(attrs) ? 'checked' : '';
+    const disabled = /disabled/i.test(attrs) ? 'disabled' : '';
+    return `<span class="checkbox-wrapper-33"><label class="checkbox"><input class="checkbox__trigger visuallyhidden" type="checkbox" ${checked} ${disabled} /><span class="checkbox__symbol"><svg aria-hidden="true" class="icon-checkbox" width="28px" height="28px" viewBox="0 0 28 28" version="1" xmlns="http://www.w3.org/2000/svg"><path d="M4 14l8 7L24 7"></path></svg></span></label></span>`;
+  });
   return clean
 }
 
@@ -319,20 +327,30 @@ export default function GuideViewer() {
     }
   }, [currentSlide, guideData?.slides.length, hasShownCongrats])
 
+  const goToTop = () => {
+    // Try to scroll the main content container, fallback to window
+    const mainContent = document.querySelector('.max-w-4xl');
+    if (mainContent) {
+      mainContent.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
   const nextSlide = () => {
     if (currentSlide < (guideData?.slides.length || 0) - 1) {
-      setCurrentSlide(currentSlide + 1)
+      setCurrentSlide(currentSlide + 1);
     }
   }
 
   const prevSlide = () => {
     if (currentSlide > 0) {
-      setCurrentSlide(currentSlide - 1)
+      setCurrentSlide(currentSlide - 1);
     }
   }
 
   const goToSlide = (index: number) => {
-    setCurrentSlide(index)
+    setCurrentSlide(index);
   }
 
   const handleShareProgress = () => {
@@ -705,6 +723,13 @@ export default function GuideViewer() {
 
   const guideUrl = `${getBaseUrl()}/guide/${params.id}`
 
+  useEffect(() => {
+    // Scroll to top when slide changes
+    if (hasStartedGuide) {
+      goToTop();
+    }
+  }, [currentSlide, hasStartedGuide]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-premium flex items-center justify-center">
@@ -872,7 +897,7 @@ export default function GuideViewer() {
           {/* Desktop: Slide Navigation Sidebar */}
           {!isMobile && (
             <div className="col-span-3">
-              <div className="bg-card rounded-lg border p-4 sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto">
+              <div className="bg-card rounded-lg border p-4 sticky top-36 max-h-[calc(100vh-3rem)] overflow-y-auto">
                 <h3 className="font-semibold text-sm mb-3">Guide Navigation</h3>
                 <div className="space-y-2">
                   {guideData.slides.map((slide, index) => (
@@ -951,7 +976,7 @@ export default function GuideViewer() {
         {/* Full Screen Start Guide Overlay */}
         {currentSlide === 0 && !hasStartedGuide && (
           <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center cursor-pointer"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center cursor-pointer"
             onClick={() => setHasStartedGuide(true)}
           >
             {/* Subtle gradient background */}
