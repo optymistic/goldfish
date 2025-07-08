@@ -24,6 +24,20 @@ export default function RootLayout({
           rel="stylesheet"
         />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        {/* Open Graph Meta Tags */}
+        <meta property="og:title" content="Goldfish - don't memorize, understand" />
+        <meta property="og:description" content="Create beautiful, interactive guides and tutorials with drag-and-drop editing" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://blockguide.vercel.app/" />
+        <meta property="og:image" content="/og.png" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        {/* Twitter Card Meta Tags */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Goldfish - don't memorize, understand" />
+        <meta name="twitter:description" content="Create beautiful, interactive guides and tutorials with drag-and-drop editing" />
+        <meta name="twitter:image" content="/og.png" />
       </head>
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>

@@ -328,12 +328,11 @@ export default function GuideViewer() {
   }, [currentSlide, guideData?.slides.length, hasShownCongrats])
 
   const goToTop = () => {
-    // Try to scroll the main content container, fallback to window
-    const mainContent = document.querySelector('.max-w-4xl');
-    if (mainContent) {
-      mainContent.scrollTo({ top: 0, behavior: 'smooth' });
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Always scroll the window to the top, after DOM update
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
     }
   }
 
