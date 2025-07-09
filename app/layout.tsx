@@ -28,7 +28,7 @@ export default function RootLayout({
         <meta property="og:title" content="Goldfish - don't memorize, understand" />
         <meta property="og:description" content="Create beautiful, interactive guides and tutorials with drag-and-drop editing" />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://blockguide.vercel.app/" />
+        <meta property="og:url" content="https://goldfishrefine.vercel.app/" />
         <meta property="og:image" content="/og.png" />
         <meta property="og:image:type" content="image/png" />
         <meta property="og:image:width" content="1200" />

@@ -508,15 +508,21 @@ export default function GuideViewer() {
           const isEmpty = !block.content || block.content.trim() === '';
           const hasBlockHtml = /<(ul|ol|li|p|div|h[1-6])\b/i.test(block.content || '');
           const headingPadding = (block.styles.padding && block.styles.padding > 0) ? `${block.styles.padding}px` : '8px 0';
+          
+          // Mobile-specific heading adjustments
+          const baseFontSize = block.styles.fontSize || 24;
+          const mobileFontSize = isMobile ? Math.min(baseFontSize, 20) : baseFontSize;
+          const mobileMargin = isMobile ? "16px 0" : "24px 0 24px 0";
+          
           if (hasBlockHtml) {
             return (
               <div
                 style={sanitizeStyleObject({
                   ...commonStyles,
-                  fontSize: `${block.styles.fontSize || 24}px`,
+                  fontSize: `${mobileFontSize}px`,
                   color: block.styles.color || "hsl(var(--foreground))",
                   fontWeight: "bold",
-                  margin: "24px 0 24px 0",
+                  margin: mobileMargin,
                   padding: headingPadding,
                 })}
                 dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? "Heading" : (block.content || '')) }}
@@ -527,10 +533,10 @@ export default function GuideViewer() {
               <h2
                 style={sanitizeStyleObject({
                   ...commonStyles,
-                  fontSize: `${block.styles.fontSize || 24}px`,
+                  fontSize: `${mobileFontSize}px`,
                   color: block.styles.color || "hsl(var(--foreground))",
                   fontWeight: "bold",
-                  margin: "24px 0 24px 0",
+                  margin: mobileMargin,
                   padding: headingPadding,
                 })}
                 dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(isEmpty ? "Heading" : (block.content || '')) }}
@@ -564,10 +570,11 @@ export default function GuideViewer() {
               alt="Guide content"
               style={sanitizeStyleObject({
                 width: '100%',
-                height: block.styles.height ? `${block.styles.height}px` : 'auto',
+                height: isMobile ? 'auto' : (block.styles.height ? `${block.styles.height}px` : 'auto'),
+                maxHeight: isMobile ? '300px' : 'none',
                 display: 'block',
                 borderRadius: commonStyles.borderRadius,
-                objectFit: 'contain',
+                objectFit: isMobile ? 'cover' : 'contain',
               })}
             />
             <button
@@ -600,10 +607,11 @@ export default function GuideViewer() {
               controls
               style={sanitizeStyleObject({
                 width: '100%',
-                height: 'auto',
+                height: isMobile ? 'auto' : 'auto',
+                maxHeight: isMobile ? '250px' : 'none',
                 display: 'block',
                 borderRadius: commonStyles.borderRadius,
-                objectFit: 'contain',
+                objectFit: isMobile ? 'cover' : 'contain',
               })}
             />
             <button
@@ -635,7 +643,7 @@ export default function GuideViewer() {
               src={block.content || ""}
               style={sanitizeStyleObject({
                 width: "100%",
-                height: "400px",
+                height: isMobile ? "250px" : "400px",
                 border: "none",
                 borderRadius: `${block.styles.borderRadius || 8}px`,
                 display: "block",
@@ -652,7 +660,7 @@ export default function GuideViewer() {
               <div 
                 style={sanitizeStyleObject({
                   width: "100%",
-                  height: "400px",
+                  height: isMobile ? "250px" : "400px",
                   border: "2px dashed #ccc",
                   borderRadius: `${block.styles.borderRadius || 8}px`,
                   display: "flex",
@@ -769,22 +777,50 @@ export default function GuideViewer() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col">
-                  <div className="flex items-center gap-2 mb-1">
-                    <BookOpen className="h-5 w-5 text-pink-500 mr-2" />
-                    <h1 className="text-base sm:text-lg font-bold gradient-text">{guideData.title}</h1>
-                    <Badge variant="secondary" className="text-xs px-2 py-0.5">{guideData.type}</Badge>
-                  </div>
-                  <div className="flex flex-wrap gap-x-2 gap-y-1">
-                    {guideData.tags.map((tag: string, index: number) => (
-                      <Badge
-                        key={tag}
-                        variant="outline"
-                        className={`text-xs ${getTagColor(tag, index)}`}
-                      >
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
+                  {/* Mobile: Title on single line */}
+                  {isMobile ? (
+                    <>
+                      <div className="flex items-center gap-2 mb-1">
+                        <BookOpen className="h-5 w-5 text-pink-500 mr-2" />
+                        <h1 className="text-base font-bold gradient-text truncate">{guideData.title}</h1>
+                      </div>
+                      {/* Type on new line */}
+                      <div className="mb-1 pb-1 pt-1">
+                        <Badge variant="secondary" className="text-xs px-2 py-0.5">{guideData.type}</Badge>
+                      </div>
+                      {/* Tags on new line */}
+                      <div className="flex flex-wrap gap-x-2 gap-y-1">
+                        {guideData.tags.map((tag: string, index: number) => (
+                          <Badge
+                            key={tag}
+                            variant="outline"
+                            className={`text-xs ${getTagColor(tag, index)}`}
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 mb-1">
+                        <BookOpen className="h-5 w-5 text-pink-500 mr-2" />
+                        <h1 className="text-base sm:text-lg font-bold gradient-text">{guideData.title}</h1>
+                        <Badge variant="secondary" className="text-xs px-2 py-0.5">{guideData.type}</Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-x-2 gap-y-1">
+                        {guideData.tags.map((tag: string, index: number) => (
+                          <Badge
+                            key={tag}
+                            variant="outline"
+                            className={`text-xs ${getTagColor(tag, index)}`}
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -801,9 +837,14 @@ export default function GuideViewer() {
             </div>
             {/* Mobile hamburger menu */}
             <div className="flex md:hidden items-center gap-2">
-              <ThemeToggle>
-                <span className="ml-2">Theme</span>
-              </ThemeToggle>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="p-2"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
             </div>
           </div>
           {/* Progress Bar */}
@@ -866,18 +907,18 @@ export default function GuideViewer() {
         </DrawerContent>
       </Drawer>
       {/* Main Content Container - update to match editor page */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Mobile: Guide Navigation as its own row */}
+      <div className={isMobile ? 'w-full px-2 py-4' : 'max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6'}>
+        {/* Mobile: Guide Navigation as horizontal scrollable row */}
         {isMobile && (
           <div className="mb-4">
             <div className="bg-card rounded-lg border p-4">
               <h3 className="font-semibold text-sm mb-3">Guide Navigation</h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
                 {guideData.slides.map((slide, index) => (
                   <button
                     key={slide.id}
                     onClick={() => goToSlide(index)}
-                    className={`flex-1 min-w-[100px] text-left p-2.5 rounded-lg border transition-colors h-12 flex items-center justify-center ${
+                    className={`flex-shrink-0 min-w-[120px] text-left p-2.5 rounded-lg border transition-colors h-12 flex items-center justify-center ${
                       currentSlide === index
                         ? "bg-primary/10 border-primary/30 text-primary dark:bg-primary/20 dark:border-primary/40 dark:text-primary"
                         : "hover:bg-muted text-foreground"
@@ -923,7 +964,7 @@ export default function GuideViewer() {
             <div className="bg-card rounded-lg border shadow-sm relative">
               <div className="p-8">
                 <div className="mb-6">
-                  <h2 className="text-2xl font-bold gradient-text mb-2">{guideData.slides[currentSlide].title}</h2>
+                  <h2 className="text-sm font-bold gradient-text mb-2">{guideData.slides[currentSlide].title}</h2>
                 </div>
                 <div className="space-y-4" style={sanitizeStyleObject({ width: '100%', padding: 0, margin: 0 })}>
                   {guideData.slides[currentSlide].blocks.map((block) => (
@@ -934,38 +975,46 @@ export default function GuideViewer() {
                 </div>
               </div>
               {/* Pagination Controls - always at bottom on mobile */}
-              <div className={`border-t bg-muted/50 px-8 py-4 ${isMobile ? 'sticky bottom-0 left-0 w-full z-20' : ''}`}>
-                <div className="flex justify-between items-center gap-4">
-                  <Button variant="outline" onClick={prevSlide} disabled={currentSlide === 0}>
-                    <ChevronLeft className="h-4 w-4 mr-2" />
+              <div className={`border-t bg-muted/50 px-8 py-4 ${isMobile ? 'sticky bottom-0 left-0 w-full z-20 rounded-t-2xl shadow-lg bg-white/90 dark:bg-background/90' : ''}`}>
+                <div className={`flex justify-between items-center gap-4 ${isMobile ? 'py-2' : ''}`}>
+                  <Button 
+                    variant={isMobile ? 'ghost' : 'outline'}
+                    onClick={prevSlide} 
+                    disabled={currentSlide === 0}
+                    className={isMobile ? 'h-12 px-5 text-base font-semibold' : 'bg-background hover:bg-accent'}
+                  >
+                    <ChevronLeft className="h-5 w-5 mr-2" />
                     Previous
                   </Button>
                   <div className="flex items-center gap-2 min-w-0 flex-1 justify-center">
                     <div className="hidden sm:block text-sm text-muted-foreground mr-3">
                       {currentSlide + 1} / {guideData.slides.length}
                     </div>
-                    <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide max-w-[200px] sm:max-w-[300px] px-2">
-                      {guideData.slides.map((_, index) => (
-                        <button
-                          key={index}
-                          onClick={() => goToSlide(index)}
-                          className={`flex-shrink-0 w-2.5 h-2.5 rounded-full transition-colors ${
-                            currentSlide === index ? "bg-primary" : "bg-muted-foreground hover:bg-muted-foreground/70"
-                          }`}
-                          title={`Go to slide ${index + 1}`}
-                        />
-                      ))}
-                    </div>
+                    {!isMobile && (
+                      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide max-w-[200px] sm:max-w-[300px] px-2">
+                        {guideData.slides.map((_, index) => (
+                          <button
+                            key={index}
+                            onClick={() => goToSlide(index)}
+                            className={`flex-shrink-0 w-2.5 h-2.5 rounded-full transition-colors ${
+                              currentSlide === index ? 'bg-primary' : 'bg-muted-foreground hover:bg-muted-foreground/70'
+                            }`}
+                            title={`Go to slide ${index + 1}`}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <Button
                     onClick={nextSlide}
                     disabled={currentSlide === guideData.slides.length - 1}
-                    className={`${
-                      currentSlide === guideData.slides.length - 1 ? 'bg-primary hover:bg-primary/90' : 'bg-primary hover:bg-primary/90'
-                    }`}
+                    className={isMobile
+                      ? `h-12 px-5 text-base font-semibold bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md border-0 ${currentSlide === guideData.slides.length - 1 ? 'opacity-80' : ''}`
+                      : `bg-background hover:bg-accent ${currentSlide === guideData.slides.length - 1 ? 'bg-primary hover:bg-primary/90 text-primary-foreground' : ''}`
+                    }
                   >
                     {currentSlide === guideData.slides.length - 1 ? 'Complete' : 'Next'}
-                    <ChevronRight className="h-4 w-4 ml-2" />
+                    <ChevronRight className="h-5 w-5 ml-2" />
                   </Button>
                 </div>
               </div>
@@ -1144,14 +1193,14 @@ export default function GuideViewer() {
       {/* Expanded Media Dialog */}
       <Dialog open={!!expandedMedia} onOpenChange={open => !open && setExpandedMedia(null)}>
         <DialogContent
-          className="fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-10 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-2xl !max-w-4xl !w-full flex flex-col items-center justify-center !max-h-[80vh]"
+          className={`fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-2xl !max-w-4xl !w-full flex flex-col items-center justify-center !max-h-[80vh] ${isMobile ? 'p-2' : 'p-10'}`}
           style={sanitizeStyleObject(expandedMedia?.backgroundStyle)}
         >
           {expandedMedia?.type === 'image' && (
-            <img src={expandedMedia.src} alt="Expanded" style={sanitizeStyleObject({ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' })} />
+            <img src={expandedMedia.src} alt="Expanded" style={sanitizeStyleObject({ maxWidth: isMobile ? '95vw' : '80vw', maxHeight: isMobile ? '85vh' : '70vh', borderRadius: isMobile ? 8 : 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' })} />
           )}
           {expandedMedia?.type === 'video' && (
-            <video src={expandedMedia.src} controls autoPlay style={sanitizeStyleObject({ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' })} />
+            <video src={expandedMedia.src} controls autoPlay style={sanitizeStyleObject({ maxWidth: isMobile ? '95vw' : '80vw', maxHeight: isMobile ? '85vh' : '70vh', borderRadius: isMobile ? 8 : 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)' })} />
           )}
         </DialogContent>
       </Dialog>
