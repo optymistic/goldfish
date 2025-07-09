@@ -784,17 +784,14 @@ export default function GuideViewer() {
                         <BookOpen className="h-5 w-5 text-pink-500 mr-2" />
                         <h1 className="text-base font-bold gradient-text truncate">{guideData.title}</h1>
                       </div>
-                      {/* Type on new line */}
-                      <div className="mb-1 pb-1 pt-1">
-                        <Badge variant="secondary" className="text-xs px-2 py-0.5">{guideData.type}</Badge>
-                      </div>
-                      {/* Tags on new line */}
-                      <div className="flex flex-wrap gap-x-2 gap-y-1">
+                      {/* Type and tags on single line */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="secondary" className="text-xs px-2 py-0.5 flex-shrink-0">{guideData.type}</Badge>
                         {guideData.tags.map((tag: string, index: number) => (
                           <Badge
                             key={tag}
                             variant="outline"
-                            className={`text-xs ${getTagColor(tag, index)}`}
+                            className={`text-xs flex-shrink-0 ${getTagColor(tag, index)}`}
                           >
                             {tag}
                           </Badge>
@@ -975,15 +972,15 @@ export default function GuideViewer() {
                 </div>
               </div>
               {/* Pagination Controls - always at bottom on mobile */}
-              <div className={`border-t bg-muted/50 px-8 py-4 ${isMobile ? 'sticky bottom-0 left-0 w-full z-20 rounded-t-2xl shadow-lg bg-white/90 dark:bg-background/90' : ''}`}>
-                <div className={`flex justify-between items-center gap-4 ${isMobile ? 'py-2' : ''}`}>
+              <div className={`border-t bg-muted/50 ${isMobile ? 'sticky bottom-0 left-0 w-full z-20 rounded-t-2xl shadow-lg bg-white/90 dark:bg-background/90 px-2 py-1' : 'px-8 py-4'}`}>
+                <div className={`flex justify-between items-center gap-4 ${isMobile ? 'py-1' : ''}`}>
                   <Button 
                     variant={isMobile ? 'ghost' : 'outline'}
                     onClick={prevSlide} 
                     disabled={currentSlide === 0}
-                    className={isMobile ? 'h-12 px-5 text-base font-semibold' : 'bg-background hover:bg-accent'}
+                    className={isMobile ? 'h-10 px-3 text-sm' : 'bg-background hover:bg-accent'}
                   >
-                    <ChevronLeft className="h-5 w-5 mr-2" />
+                    <ChevronLeft className="h-4 w-4 mr-2" />
                     Previous
                   </Button>
                   <div className="flex items-center gap-2 min-w-0 flex-1 justify-center">
@@ -1009,12 +1006,12 @@ export default function GuideViewer() {
                     onClick={nextSlide}
                     disabled={currentSlide === guideData.slides.length - 1}
                     className={isMobile
-                      ? `h-12 px-5 text-base font-semibold bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md border-0 ${currentSlide === guideData.slides.length - 1 ? 'opacity-80' : ''}`
+                      ? `h-10 px-3 text-sm bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-md border-0 ${currentSlide === guideData.slides.length - 1 ? 'opacity-80' : ''}`
                       : `bg-background hover:bg-accent ${currentSlide === guideData.slides.length - 1 ? 'bg-primary hover:bg-primary/90 text-primary-foreground' : ''}`
                     }
                   >
                     {currentSlide === guideData.slides.length - 1 ? 'Complete' : 'Next'}
-                    <ChevronRight className="h-5 w-5 ml-2" />
+                    <ChevronRight className="h-4 w-4 ml-2" />
                   </Button>
                 </div>
               </div>
