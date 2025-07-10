@@ -27,7 +27,8 @@ import {
   LogOut,
   Calendar,
   Edit,
-  Fish
+  Fish,
+  BarChart3
 } from "lucide-react"
 import { AuthGuard } from "@/components/auth-guard"
 import { apiClient } from "@/lib/api-client"
@@ -382,6 +383,16 @@ function DashboardContent() {
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
               <ThemeToggle />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/admin')}
+                className="text-muted-foreground hover:text-foreground shrink-0"
+                title="Admin Panel"
+              >
+                <BarChart3 className="h-4 w-4" />
+                <span className="hidden sm:inline ml-2">Admin</span>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

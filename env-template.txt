@@ -1,0 +1,15 @@
+# Add these environment variables to your .env.local file:
+
+# Cloudflare R2 Configuration
+R2_ENDPOINT=https://your-account-id.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=your_r2_access_key_id
+R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
+R2_BUCKET_NAME=guide-files
+
+# Instructions:
+# 1. Go to your Cloudflare dashboard
+# 2. Navigate to R2 Object Storage
+# 3. Create a new bucket called "guide-files"
+# 4. Create API tokens with Object Read/Write permissions
+# 5. Copy the endpoint URL, access key ID, and secret access key
+# 6. Add them to your .env.local file 

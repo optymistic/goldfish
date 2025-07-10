@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
-import { ChevronLeft, ChevronRight, Home, Share2, BookOpen, Copy, Maximize, Maximize2, Menu } from "lucide-react"
+import { ChevronLeft, ChevronRight, Home, Share2, BookOpen, Copy, Maximize, Maximize2, Menu, Upload, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +15,7 @@ import { useIsMobile } from "@/components/ui/use-mobile"
 import DOMPurify from 'dompurify'
 import { apiClient } from "@/lib/api-client"
 import "@/components/ui/fancy-checkbox.css";
+import { FileUpload } from "@/components/file-upload"
 
 // Add sanitizeStyleObject function to prevent array-to-style errors
 function sanitizeStyleObject(styleObj: any): any {
@@ -64,7 +65,7 @@ function validStyle(s: any) {
 
 interface ContentBlock {
   id: string
-  type: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column"
+  type: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column" | "input-field" | "file-upload"
   content: string | null
   left_content?: string | null
   right_content?: string | null
@@ -82,6 +83,7 @@ interface ContentBlock {
     columnGap?: number
     leftColumnWidth?: number
     rightColumnWidth?: number
+    placeholder?: string
   }
 }
 
@@ -224,6 +226,14 @@ function sanitizeAndEnhanceHtml(html: string) {
   return clean
 }
 
+const PUBLIC_ROOT = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || 'https://pub-d6b84090aa7c4bd2b76e7511ce7da6aa.r2.dev';
+function getPublicUrl(url: string) {
+  if (!url) return '';
+  if (url.startsWith(PUBLIC_ROOT)) return url;
+  const filename = url.split('/').pop();
+  return `${PUBLIC_ROOT.replace(/\/$/, '')}/${filename}`;
+}
+
 export default function GuideViewer() {
   const params = useParams()
   const searchParams = useSearchParams()
@@ -243,9 +253,21 @@ export default function GuideViewer() {
   const isMobile = useIsMobile();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // State for all responses
+  const [responses, setResponses] = useState<{ [blockId: string]: string }>({})
+  const [files, setFiles] = useState<{ [blockId: string]: { name: string; url: string; type?: string } }>({})
+  const [fileUploadStatus, setFileUploadStatus] = useState<{ [blockId: string]: 'idle' | 'uploading' | 'success' | 'error' }>({})
+  const [fileUploadError, setFileUploadError] = useState<{ [blockId: string]: string }>({})
+  const [submittingAll, setSubmittingAll] = useState(false)
+  const [submitAllSuccess, setSubmitAllSuccess] = useState(false)
+  const [submitAllError, setSubmitAllError] = useState<string | null>(null)
+  // Add state to track if current slide has been submitted
+  const [submittedSlides, setSubmittedSlides] = useState<{ [slideId: string]: boolean }>({});
+
   // Calculate progress percentage
   const progress = guideData && hasStartedGuide ? ((currentSlide + 1) / guideData.slides.length) * 100 : 0
 
+  // Load previous responses for this user (by sessionStorage userIdentifier)
   useEffect(() => {
     const loadGuide = async () => {
       try {
@@ -271,6 +293,16 @@ export default function GuideViewer() {
     }
 
     loadGuide()
+  }, [params.id])
+
+  // Remove the effect that loads previous responses for this user
+  // useEffect(() => { ... fetch(`/api/responses?...`) ... }, [guideData?.slides, params.id])
+  // Instead, always start with empty state for responses and files
+  useEffect(() => {
+    setResponses({})
+    setFiles({})
+    // Optionally, remove userIdentifier for a true fresh start
+    sessionStorage.removeItem('userIdentifier')
   }, [params.id])
 
   // Reset congrats state when guide changes
@@ -385,6 +417,202 @@ export default function GuideViewer() {
   const handleShareFromCongrats = () => {
     setIsCongratsDialogOpen(false)
     handleShareProgress()
+  }
+
+  // Handler for input field response
+  const handleInputResponse = async (block: any, answer: string) => {
+    setResponses(prev => ({ ...prev, [block.id]: answer }))
+  }
+
+  // Handler for file upload (uploads to R2, stores URL in state)
+  const handleFileUpload = async (block: any, file: File) => {
+    setFileUploadStatus(prev => ({ ...prev, [block.id]: 'uploading' }))
+    setFileUploadError(prev => ({ ...prev, [block.id]: '' }))
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData })
+      const uploadData = await uploadRes.json()
+      if (uploadData.url) {
+        setFiles(prev => ({ ...prev, [block.id]: { name: uploadData.originalName, url: uploadData.url, type: file.type } }))
+        setFileUploadStatus(prev => ({ ...prev, [block.id]: 'success' }))
+      } else {
+        setFileUploadStatus(prev => ({ ...prev, [block.id]: 'error' }))
+        setFileUploadError(prev => ({ ...prev, [block.id]: uploadData.error || 'Upload failed' }))
+      }
+    } catch (err: any) {
+      setFileUploadStatus(prev => ({ ...prev, [block.id]: 'error' }))
+      setFileUploadError(prev => ({ ...prev, [block.id]: err.message || 'Upload failed' }))
+    }
+  }
+
+  // Handler for file removal
+  const handleRemoveFile = async (blockId: string) => {
+    const file = files[blockId];
+    if (file) {
+      try {
+        // Extract filename from URL
+        const filename = file.url.split('/').pop();
+        if (filename) {
+          // Delete from R2 storage
+          const deleteRes = await fetch("/api/upload", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename })
+          });
+          
+          if (!deleteRes.ok) {
+            console.error("Failed to delete file from storage");
+          }
+        }
+      } catch (error) {
+        console.error("Error deleting file:", error);
+      }
+    }
+    
+    // Remove from local state
+    setFiles(prev => {
+      const newFiles = { ...prev };
+      delete newFiles[blockId];
+      return newFiles;
+    });
+    setFileUploadStatus(prev => ({ ...prev, [blockId]: 'idle' }));
+    setFileUploadError(prev => ({ ...prev, [blockId]: '' }));
+  };
+
+  // Handler for file replacement
+  const handleReplaceFile = (blockId: string) => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,application/x-zip-compressed,text/plain';
+    fileInput.onchange = async (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (file) {
+        // Delete old file if it exists
+        const oldFile = files[blockId];
+        if (oldFile) {
+          try {
+            const filename = oldFile.url.split('/').pop();
+            if (filename) {
+              await fetch("/api/upload", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename })
+              });
+            }
+          } catch (error) {
+            console.error("Error deleting old file:", error);
+          }
+        }
+        
+        // Upload new file
+        handleFileUpload({ id: blockId }, file);
+      }
+      fileInput.remove(); // Clean up the input element
+    };
+    fileInput.click();
+  };
+
+  // Handler for all responses submit
+  const handleSubmitAll = async () => {
+    setSubmittingAll(true)
+    setSubmitAllSuccess(false)
+    setSubmitAllError(null)
+    const userIdentifier =
+      typeof window !== "undefined"
+        ? sessionStorage.getItem("userIdentifier") || (() => {
+            const id = `user_${Date.now()}_${Math.random().toString(36).substring(2)}`
+            sessionStorage.setItem("userIdentifier", id)
+            return id
+          })()
+        : ""
+    
+    // Get current slide data
+    const currentSlideData = guideData?.slides[currentSlide]
+    if (!currentSlideData) {
+      setSubmitAllError("Slide not found")
+      setSubmittingAll(false)
+      return
+    }
+    // Prevent resubmission if already submitted
+    if (submittedSlides[currentSlideData.id]) {
+      setSubmittingAll(false)
+      return
+    }
+    
+    // Gather blocks from current slide only
+    const currentSlideBlocks = currentSlideData.blocks.map(block => ({ ...block, slide_id: currentSlideData.id }))
+    
+    // Prepare response array for current slide only
+    const responseArray = currentSlideBlocks
+      .filter(block => block.type === "input-field" || block.type === "file-upload")
+      .map(block => {
+        if (block.type === "input-field") {
+          return {
+            guide_id: params.id,
+            slide_id: block.slide_id,
+            block_id: block.id,
+            user_identifier: userIdentifier,
+            question: block.content,
+            answer: responses[block.id] || "",
+          }
+        } else if (block.type === "file-upload") {
+          return {
+            guide_id: params.id,
+            slide_id: block.slide_id,
+            block_id: block.id,
+            user_identifier: userIdentifier,
+            question: block.content,
+            file_url: files[block.id]?.url || "",
+            file_name: files[block.id]?.name || "",
+          }
+        }
+        return null
+      })
+      .filter(Boolean)
+    
+    // Validate that all interactive blocks have responses
+    const interactiveBlocks = currentSlideBlocks.filter(block => block.type === "input-field" || block.type === "file-upload")
+    const hasEmptyResponses = interactiveBlocks.some(block => {
+      if (block.type === "input-field") {
+        return !responses[block.id] || responses[block.id].trim() === ""
+      } else if (block.type === "file-upload") {
+        return !files[block.id] || !files[block.id].url
+      }
+      return false
+    })
+    
+    if (hasEmptyResponses) {
+      setSubmitAllError("Please fill in all required fields")
+      setSubmittingAll(false)
+      return
+    }
+    
+    // Check if there are any responses to submit
+    if (responseArray.length === 0) {
+      setSubmitAllError("No responses to submit")
+      setSubmittingAll(false)
+      return
+    }
+    
+    try {
+      const res = await fetch("/api/responses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ responses: responseArray }),
+      })
+      if (res.ok) {
+        setSubmitAllSuccess(true)
+        setSubmittedSlides(prev => ({ ...prev, [currentSlideData.id]: true }))
+        setTimeout(() => setSubmitAllSuccess(false), 2000)
+      } else {
+        const data = await res.json()
+        setSubmitAllError(data.error || "Failed to submit responses")
+      }
+    } catch (err: any) {
+      setSubmitAllError(err.message || "Failed to submit responses")
+    }
+    setSubmittingAll(false)
   }
 
   const renderColumnContent = (type: string, content: string, styles: any) => {
@@ -708,6 +936,91 @@ export default function GuideViewer() {
             </div>
           )
         }
+      case "input-field":
+        return (
+          <div className="space-y-2">
+            <div
+              style={sanitizeStyleObject({ ...commonStyles, fontSize: `${block.styles.fontSize || 16}px`, color: block.styles.color || "hsl(var(--foreground))" })}
+              dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(block.content || "") }}
+            />
+            <input
+              type="text"
+              className="w-full border rounded px-3 py-2"
+              placeholder={block.styles?.placeholder !== undefined ? block.styles.placeholder : "Type your answer..."}
+              value={responses[block.id] ?? ""}
+              onChange={e => setResponses(prev => ({ ...prev, [block.id]: e.target.value }))}
+              disabled={submittingAll}
+            />
+          </div>
+        )
+      case "file-upload":
+        return (
+          <div className="space-y-2">
+            <div
+              style={sanitizeStyleObject({ ...commonStyles, fontSize: `${block.styles.fontSize || 16}px`, color: block.styles.color || "hsl(var(--foreground))" })}
+              dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(block.content || "") }}
+            />
+            {files[block.id] ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/50">
+                  {/* File preview */}
+                  {(() => {
+                    const file = files[block.id];
+                    const url = getPublicUrl(file.url);
+                    if (file.type?.startsWith("image/")) {
+                      // Image preview
+                      return <img src={url} alt={file.name} className="w-12 h-12 object-cover rounded border" style={{ maxWidth: 48, maxHeight: 48 }} />;
+                    } else if (file.type === "application/pdf") {
+                      // PDF icon
+                      return <span title="PDF" className="inline-block w-10 h-12 bg-gray-200 text-gray-700 flex items-center justify-center rounded border font-bold">PDF</span>;
+                    } else {
+                      // Generic file icon
+                      return <span title="File" className="inline-block w-10 h-12 bg-gray-100 text-gray-500 flex items-center justify-center rounded border font-bold">📄</span>;
+                    }
+                  })()}
+                  <span className="truncate max-w-[120px]" title={files[block.id].name}>{files[block.id].name}</span>
+                  <Button size="icon" variant="ghost" onClick={() => navigator.clipboard.writeText(files[block.id].url)}><Copy className="h-4 w-4" /></Button>
+                  <a href={getPublicUrl(files[block.id].url)} target="_blank" rel="noopener noreferrer" className="text-primary underline">View</a>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => handleRemoveFile(block.id)}
+                    disabled={submittingAll}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Remove
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => handleReplaceFile(block.id)}
+                    disabled={submittingAll}
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    Replace
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <FileUpload
+                onFileSelect={file => handleFileUpload(block, file)}
+                accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,application/x-zip-compressed,text/plain"
+                disabled={fileUploadStatus[block.id] === 'uploading' || submittingAll}
+              >
+                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:border-muted-foreground/50 transition-colors">
+                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Click to upload or drag and drop</p>
+                </div>
+              </FileUpload>
+            )}
+            {fileUploadStatus[block.id] === 'uploading' && <div className="text-xs text-muted-foreground">Uploading...</div>}
+            {fileUploadStatus[block.id] === 'success' && <div className="text-xs text-green-600">Uploaded!</div>}
+            {fileUploadStatus[block.id] === 'error' && <div className="text-xs text-red-600">{fileUploadError[block.id]}</div>}
+          </div>
+        )
       default:
         return null
     }
@@ -970,6 +1283,28 @@ export default function GuideViewer() {
                     </div>
                   ))}
                 </div>
+                
+                {/* Submit button for interactive blocks */}
+                {guideData.slides[currentSlide].blocks.some(
+                  (block: any) => block.type === "input-field" || block.type === "file-upload"
+                ) && (
+                  <div className="mt-8 flex flex-col items-center">
+                    <Button
+                      onClick={handleSubmitAll}
+                      disabled={submittingAll || Object.values(fileUploadStatus).some(status => status === 'uploading') || submittedSlides[guideData.slides[currentSlide].id]}
+                      className="w-full max-w-xs"
+                    >
+                      {submittedSlides[guideData.slides[currentSlide].id]
+                        ? "Submitted!"
+                        : submittingAll
+                          ? "Submitting..."
+                          : submitAllSuccess
+                            ? "Submitted!"
+                            : "Submit"}
+                    </Button>
+                    {submitAllError && <div className="text-xs text-red-600 mt-2">{submitAllError}</div>}
+                  </div>
+                )}
               </div>
               {/* Pagination Controls - always at bottom on mobile */}
               <div className={`border-t bg-muted/50 ${isMobile ? 'sticky bottom-0 left-0 w-full z-20 rounded-t-2xl shadow-lg bg-white/90 dark:bg-background/90 px-2 py-1' : 'px-8 py-4'}`}>
@@ -1201,6 +1536,7 @@ export default function GuideViewer() {
           )}
         </DialogContent>
       </Dialog>
+
     </div>
   )
 }

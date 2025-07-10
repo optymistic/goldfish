@@ -106,7 +106,7 @@ export interface Database {
         Row: {
           id: string
           slide_id: string
-          type: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column"
+          type: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column" | "input-field" | "file-upload"
           content: string | null
           left_content: string | null
           right_content: string | null
@@ -120,7 +120,7 @@ export interface Database {
         Insert: {
           id?: string
           slide_id: string
-          type: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column"
+          type: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column" | "input-field" | "file-upload"
           content?: string | null
           left_content?: string | null
           right_content?: string | null
@@ -134,7 +134,7 @@ export interface Database {
         Update: {
           id?: string
           slide_id?: string
-          type?: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column"
+          type?: "heading" | "paragraph" | "image" | "video" | "gif" | "embed" | "two-column" | "input-field" | "file-upload"
           content?: string | null
           left_content?: string | null
           right_content?: string | null
@@ -144,6 +144,47 @@ export interface Database {
           position?: number
           created_at?: string
           updated_at?: string
+        }
+      }
+      user_responses: {
+        Row: {
+          id: string
+          guide_id: string
+          slide_id: string
+          block_id: string
+          user_identifier: string
+          question: string
+          answer: string | null
+          file_url: string | null
+          file_name: string | null
+          file_size: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          guide_id: string
+          slide_id: string
+          block_id: string
+          user_identifier: string
+          question: string
+          answer?: string | null
+          file_url?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          guide_id?: string
+          slide_id?: string
+          block_id?: string
+          user_identifier?: string
+          question?: string
+          answer?: string | null
+          file_url?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          created_at?: string
         }
       }
     }

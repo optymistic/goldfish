@@ -27,6 +27,10 @@ import {
   Edit,
   Maximize2,
   BookCheck,
+  MessageSquare,
+  Upload,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -49,6 +53,7 @@ import DOMPurify from 'dompurify'
 // @ts-ignore
 import type { default as DOMPurifyType } from 'dompurify';
 import "@/components/ui/fancy-checkbox.css";
+import { FileUpload } from "@/components/file-upload"
 
 // Use Supabase types
 type Slide = Database["public"]["Tables"]["slides"]["Row"] & { blocks: ContentBlock[] }
@@ -496,6 +501,66 @@ export function GuideEditor() {
     }
   }
 
+  const moveSlideUp = (slideIndex: number) => {
+    if (slideIndex === 0) return // Can't move first slide up
+    
+    const updatedSlides = [...slides]
+    const temp = updatedSlides[slideIndex]
+    updatedSlides[slideIndex] = updatedSlides[slideIndex - 1]
+    updatedSlides[slideIndex - 1] = temp
+    
+    // Update positions
+    updatedSlides.forEach((slide, index) => {
+      slide.position = index + 1
+    })
+    
+    setSlides(updatedSlides)
+    
+    // Update current slide if it was the moved slide
+    if (currentSlide === slideIndex) {
+      setCurrentSlide(slideIndex - 1)
+    } else if (currentSlide === slideIndex - 1) {
+      setCurrentSlide(slideIndex)
+    }
+    
+    setHasUnsavedChanges(true)
+    
+    toast({
+      title: "Slide Moved",
+      description: `"${temp.title}" moved to position ${slideIndex}`,
+    })
+  }
+
+  const moveSlideDown = (slideIndex: number) => {
+    if (slideIndex === slides.length - 1) return // Can't move last slide down
+    
+    const updatedSlides = [...slides]
+    const temp = updatedSlides[slideIndex]
+    updatedSlides[slideIndex] = updatedSlides[slideIndex + 1]
+    updatedSlides[slideIndex + 1] = temp
+    
+    // Update positions
+    updatedSlides.forEach((slide, index) => {
+      slide.position = index + 1
+    })
+    
+    setSlides(updatedSlides)
+    
+    // Update current slide if it was the moved slide
+    if (currentSlide === slideIndex) {
+      setCurrentSlide(slideIndex + 1)
+    } else if (currentSlide === slideIndex + 1) {
+      setCurrentSlide(slideIndex)
+    }
+    
+    setHasUnsavedChanges(true)
+    
+    toast({
+      title: "Slide Moved",
+      description: `"${temp.title}" moved to position ${slideIndex + 2}`,
+    })
+  }
+
   const addBlock = (type: ContentBlock["type"]) => {
     const slideId = slides[currentSlide]?.id ?? generateUUID()
     const newBlock: ContentBlock = {
@@ -545,6 +610,10 @@ export function GuideEditor() {
         return "https://www.youtube.com/embed/dQw4w9WgXcQ"
       case "two-column":
         return ""
+      case "input-field":
+        return "What is your question?"
+      case "file-upload":
+        return "Upload your file here..."
       default:
         return ""
     }
@@ -633,6 +702,28 @@ export function GuideEditor() {
           columnGap: 16,
           leftColumnWidth: 50,
           rightColumnWidth: 50
+        }
+      case "input-field":
+        return {
+          fontSize: 16,
+          color: "hsl(var(--foreground))",
+          backgroundColor: "transparent",
+          padding: 16,
+          borderRadius: 8,
+          borderWidth: 1,
+          borderColor: "hsl(var(--border))",
+          placeholder: "User answer (preview)"
+        }
+      case "file-upload":
+        return {
+          fontSize: 16,
+          color: "hsl(var(--foreground))",
+          backgroundColor: "transparent",
+          padding: 16,
+          borderRadius: 8,
+          borderWidth: 2,
+          borderColor: "hsl(var(--border))",
+          borderStyle: "dashed"
         }
       default:
         return { backgroundColor: "transparent" }
@@ -1015,6 +1106,44 @@ export function GuideEditor() {
             )}
           </div>
         )
+      case "input-field":
+        return (
+          <div className="space-y-2">
+            <div
+              style={sanitizeStyleObject({
+                ...finalStyles,
+                fontSize: `${styles.fontSize || 16}px`,
+                color: styles.color || "hsl(var(--foreground))"
+              })}
+              dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(content) }}
+            />
+            <input
+              type="text"
+              className="w-full border rounded px-3 py-2 bg-muted/50 text-muted-foreground"
+              placeholder={styles.placeholder !== undefined ? styles.placeholder : "User answer (preview)"}
+              disabled
+            />
+          </div>
+        )
+      case "file-upload":
+        return (
+          <div className="space-y-2">
+            <div
+              style={sanitizeStyleObject({
+                ...finalStyles,
+                fontSize: `${styles.fontSize || 16}px`,
+                color: styles.color || "hsl(var(--foreground))"
+              })}
+              dangerouslySetInnerHTML={{ __html: sanitizeAndEnhanceHtml(content) }}
+            />
+            <FileUpload onFileSelect={() => {}} disabled>
+              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
+                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">File upload (preview only)</p>
+              </div>
+            </FileUpload>
+          </div>
+        )
       default:
         return null
     }
@@ -1104,7 +1233,7 @@ export function GuideEditor() {
       <div className="min-h-screen bg-premium flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="loading-rings mx-auto"></div>
-          <p className="text-lg font-semibold bg-gradient-to-r from-pink-500 via-purple-500 to-violet-500 bg-clip-text text-transparent animate-pulse">
+          <p className="text-lg font-bold bg-gradient-to-r from-pink-500 via-purple-500 to-violet-500 bg-clip-text text-transparent animate-pulse">
             Loading guide...
           </p>
         </div>
@@ -1339,7 +1468,12 @@ export function GuideEditor() {
                     onClick={() => setCurrentSlide(index)}
                     className="flex-1 p-3"
                   >
-                    <div className="text-xs font-medium mb-1 text-foreground">Slide {index + 1}</div>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-medium text-foreground">Slide {index + 1}</div>
+                      <div className="text-xs text-muted-foreground/60 font-mono">
+                        #{index + 1}
+                      </div>
+                    </div>
                     <div 
                       className="text-xs font-bold text-muted-foreground truncate"
                       style={{
@@ -1357,20 +1491,54 @@ export function GuideEditor() {
                     </div>
                   </div>
                   
-                  {/* Delete button - only show on hover and if more than 1 slide */}
-                  {slides.length > 1 && (
+                  {/* Reorder and Delete buttons - only show on hover */}
+                  <div className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                    {/* Move Up button */}
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="absolute top-1 right-1 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-destructive/10 hover:text-destructive border border-destructive/20 hover:border-destructive/40"
+                      className="h-6 w-6 p-0 hover:bg-primary/10 hover:text-primary border border-primary/20 hover:border-primary/40 disabled:opacity-30 disabled:cursor-not-allowed"
                       onClick={(e) => {
                         e.stopPropagation()
-                        deleteSlide(index)
+                        moveSlideUp(index)
                       }}
+                      disabled={index === 0}
+                      title="Move slide up"
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <ArrowUp className="h-3 w-3" />
                     </Button>
-                  )}
+                    
+                    {/* Move Down button */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 p-0 hover:bg-primary/10 hover:text-primary border border-primary/20 hover:border-primary/40 disabled:opacity-30 disabled:cursor-not-allowed"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        moveSlideDown(index)
+                      }}
+                      disabled={index === slides.length - 1}
+                      title="Move slide down"
+                    >
+                      <ArrowDown className="h-3 w-3" />
+                    </Button>
+                    
+                    {/* Delete button - only show if more than 1 slide */}
+                    {slides.length > 1 && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive border border-destructive/20 hover:border-destructive/40"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteSlide(index)
+                        }}
+                        title="Delete slide"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                   
                   {/* Premium gradient overlay */}
                   <div className={`absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-muted/5 pointer-events-none ${
@@ -1462,6 +1630,14 @@ export function GuideEditor() {
                     <Layout className="h-3 w-3 mr-1" />
                     2 Columns
                   </Button>
+                  <Button size="sm" variant="outline" onClick={() => addBlock("input-field")}>
+                    <MessageSquare className="h-3 w-3 mr-1" />
+                    Input Field
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => addBlock("file-upload")}>
+                    <Upload className="h-3 w-3 mr-1" />
+                    File Upload
+                  </Button>
                 </div>
               </div>
             )}
@@ -1521,6 +1697,8 @@ export function GuideEditor() {
                         <SelectItem value="gif">GIF</SelectItem>
                         <SelectItem value="embed">Embed</SelectItem>
                         <SelectItem value="two-column">Two Column</SelectItem>
+                        <SelectItem value="input-field">Input Field</SelectItem>
+                        <SelectItem value="file-upload">File Upload</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1589,6 +1767,35 @@ export function GuideEditor() {
                           )}
                         </>
                       )}
+                    </div>
+                  )}
+
+                  {/* Input Field Placeholder */}
+                  {selectedBlockData.type === "input-field" && (
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">Input Placeholder</Label>
+                      <Input
+                        value={selectedBlockData.styles?.placeholder ?? ""}
+                        onChange={(e) => {
+                          updateBlockStyle(selectedBlockData.id, "placeholder", e.target.value)
+                        }}
+                        placeholder="Enter placeholder text for the input field..."
+                        className="text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        This text will appear as a hint inside the input field to help users understand what to enter.
+                      </p>
+                      <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800">
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mb-1">
+                          <strong>Examples:</strong>
+                        </p>
+                        <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                          <li>• "Enter your full name"</li>
+                          <li>• "0x0c5E714177E06b8f2d4827F413dF8210C35F754F"</li>
+                          <li>• "your.email@example.com"</li>
+                          <li>• "Describe your experience..."</li>
+                        </ul>
+                      </div>
                     </div>
                   )}
 
